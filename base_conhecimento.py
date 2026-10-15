@@ -7,11 +7,6 @@ Este módulo contém somente dados e regras declarativas:
     - dez trilhas de carreira e respectivas matrizes;
     - trinta regras SE-ENTÃO propostas;
     - pesos de pontuação e ordem de desempate.
-
-A execução do motor de inferência com Experta, o cálculo de recomendações
-e a interface Streamlit pertencem às fases seguintes.
-
-Compatibilidade: Python 3.10 ou superior; sem dependências externas.
 """
 
 from __future__ import annotations
@@ -335,10 +330,10 @@ PESOS_PONTUACAO: dict[str, int] = {
 # registra justificativas, mas NAO multiplica os pontos da dimensão.
 
 ORDEM_DESEMPATE: tuple[str, ...] = (
-    "atuacao",               # 1o: atividade profissional escolhida (pergunta 2)
-    "entrega",               # 2o: resultado desejado (pergunta 4)
-    "ferramenta_principal",  # 3o: afinidade com ferramenta principal (pergunta 3)
-    "matematica",            # 4o: compatibilidade matemática (pergunta 1)
+    "atuacao",               
+    "entrega",               
+    "ferramenta_principal",  
+    "matematica",            
 )
 
 
