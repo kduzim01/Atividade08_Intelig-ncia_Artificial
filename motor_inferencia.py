@@ -1,10 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.60.
+Atividade Aula 08 — Fase 2, etapa 2.66.
 
-Preserva integralmente as regras 1 a 21 e acrescenta as regras 22 a 24 de
-Desenvolvimento Mobile. Os disparos são registrados para futuras justificativas.
-Pontuação, desempate e as demais 6 regras ficam para etapas posteriores.
+Preserva integralmente as regras 1 a 24 e acrescenta as regras 25 a 27 de
+Engenharia de Qualidade e Testes (QA). Os disparos são registrados para
+futuras justificativas. Pontuação, desempate e as demais 3 regras ficam
+para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 24."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 27."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -76,6 +77,7 @@ class MotorInferencia(KnowledgeEngine):
             16: "devops_sre", 17: "devops_sre", 18: "devops_sre",
             19: "cloud_architecture", 20: "cloud_architecture", 21: "cloud_architecture",
             22: "desenvolvimento_mobile", 23: "desenvolvimento_mobile", 24: "desenvolvimento_mobile",
+            25: "engenharia_qa", 26: "engenharia_qa", 27: "engenharia_qa",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -243,6 +245,28 @@ class MotorInferencia(KnowledgeEngine):
     def regra_24_desenvolvimento_mobile(self) -> None:
         self._registrar_disparo(24)
 
+    # Regra 25: atuação em testes de software E ferramenta QA.
+    @Rule(PerfilUsuario(atuacao="qa", ferramenta="qa"))
+    def regra_25_engenharia_qa(self) -> None:
+        self._registrar_disparo(25)
+
+    # Regra 26: atuação em testes E entrega focada em qualidade de software.
+    @Rule(PerfilUsuario(atuacao="qa", entrega="qualidade"))
+    def regra_26_engenharia_qa(self) -> None:
+        self._registrar_disparo(26)
+
+    # Regra 27: Python OU JavaScript/TypeScript OU ferramentas QA,
+    # combinados com entrega de qualidade de software.
+    @Rule(
+        OR(
+            PerfilUsuario(ferramenta="python", entrega="qualidade"),
+            PerfilUsuario(ferramenta="javascript", entrega="qualidade"),
+            PerfilUsuario(ferramenta="qa", entrega="qualidade"),
+        )
+    )
+    def regra_27_engenharia_qa(self) -> None:
+        self._registrar_disparo(27)
+
 
 if __name__ == "__main__":
     motor = MotorInferencia()
@@ -258,7 +282,9 @@ if __name__ == "__main__":
     ]
     assert len(perfis) == 1, "Deveria existir um único fato de perfil."
     motor.run()
-    assert not motor.regras_disparadas, "Perfil QA não deve ativar regras Back-end."
+    assert all(
+        regra.numero not in (1, 2, 3) for regra in motor.regras_disparadas
+    ), "Perfil QA não deve ativar regras Back-end."
     print("Motor inicializado e base validada com sucesso!")
     print("Fato PerfilUsuario registrado com as quatro respostas.")
     print("Perfil QA: nenhuma regra Back-end disparada (correto).")
@@ -753,5 +779,97 @@ if __name__ == "__main__":
     print("Perfil apenas com entrega de aplicativos: nenhuma regra disparada.")
 
     print("Regras de Desenvolvimento Mobile 22, 23 e 24 validadas nos exemplos!")
-    print("Outras 6 regras, pontuação e recomendações: etapas futuras.")
+
+    # Perfil completo QA: atuação em testes, ferramenta de automação e qualidade.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "qa",
+        "ferramenta": "qa", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [25, 26, 27], f"QA completo: esperado [25, 26, 27], obtido {numeros}."
+    print(f"Perfil QA completo: regras disparadas {numeros}.")
+
+    # Atuação em QA + ferramenta QA, sem foco na entrega de qualidade: apenas 25.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "qa",
+        "ferramenta": "qa", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [25], f"QA e ferramentas: esperado [25], obtido {numeros}."
+    print(f"Perfil QA com Playwright/Selenium/Cypress: regras disparadas {numeros}.")
+
+    # Atuação em QA + entrega de qualidade, sem ferramenta técnica: apenas 26.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "qa",
+        "ferramenta": "nenhuma", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [26], f"Atuação/qualidade: esperado [26], obtido {numeros}."
+    print(f"Perfil QA iniciante e entrega de qualidade: regras disparadas {numeros}.")
+
+    # Python + entrega de qualidade mesmo sem atuação em QA: apenas 27.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [27], f"Python/qualidade: esperado [27], obtido {numeros}."
+    print(f"Perfil Python e qualidade: regras disparadas {numeros}.")
+
+    # JavaScript/TypeScript + entrega de qualidade, sem atuação QA: apenas 27.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "javascript", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [27], f"JavaScript/qualidade: esperado [27], obtido {numeros}."
+    print(f"Perfil JavaScript e qualidade: regras disparadas {numeros}.")
+
+    # Ferramentas de QA + entrega de qualidade, sem atuação QA: apenas 27.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "qa", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [27], f"Ferramenta QA/qualidade: esperado [27], obtido {numeros}."
+    print(f"Perfil ferramenta QA e qualidade: regras disparadas {numeros}.")
+
+    # Atuação QA + JavaScript + qualidade: regras 26 e 27, não 25.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "qa",
+        "ferramenta": "javascript", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [26, 27], f"QA com JS: esperado [26, 27], obtido {numeros}."
+    print(f"Perfil QA com JavaScript e qualidade: regras disparadas {numeros}.")
+
+    # Apenas ferramentas QA, sem foco em testes ou qualidade: nenhuma regra.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "qa", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Ferramenta QA isolada não deveria disparar regra: {numeros}."
+    print("Perfil apenas com ferramenta QA: nenhuma regra disparada.")
+
+    # Apenas entrega de qualidade sem atuação ou ferramentas QA: nenhuma regra.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "nenhuma", "entrega": "qualidade",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Entrega de qualidade isolada não deveria disparar regra: {numeros}."
+    print("Perfil apenas com entrega de qualidade: nenhuma regra disparada.")
+
+    print("Regras de Engenharia de Qualidade e Testes (QA) 25, 26 e 27 validadas nos exemplos!")
+    print("Outras 3 regras, pontuação e recomendações: etapas futuras.")
 
