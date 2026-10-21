@@ -1,17 +1,18 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.72.
+Atividade Aula 08 — Fase 2, etapa 2.78.
 
-Preserva integralmente as regras 1 a 27 e acrescenta as regras 28 a 30 de
-Gestão de Produtos (Product Management). Os disparos são registrados para
-futuras justificativas. Pontuação, desempate e recomendações serão
-implementados em etapas posteriores.
+Preserva as trinta regras Experta e seus cenários de teste. Calcula a
+pontuação de cada trilha a partir das quatro respostas e dos pesos da
+Fase 1, sem duplicar pontos por quantidade de regras disparadas.
+Desempate, seleção da carreira e recomendação final: próximas etapas.
 """
 
 from __future__ import annotations
 
 import collections
 import collections.abc
+from dataclasses import dataclass
 
 # Compatibilidade temporária do frozendict 1.2 (Experta 1.9.4) com Python 3.12.
 # O ajuste ocorre apenas neste processo; não modifica bibliotecas instaladas.
@@ -20,7 +21,41 @@ if not hasattr(collections, "Mapping"):
 
 from experta import OR, Fact, KnowledgeEngine, Rule
 
-from base_conhecimento import PERGUNTAS, REGRAS, Regra, validar_base_conhecimento
+from base_conhecimento import (
+    PERGUNTAS,
+    PESOS_PONTUACAO,
+    REGRAS,
+    TRILHAS,
+    Regra,
+    validar_base_conhecimento,
+)
+
+
+@dataclass(frozen=True)
+class PontuacaoTrilha:
+    """Detalhamento dos pontos de uma trilha, sem multiplicar critérios.
+
+    Os campos de ferramenta são mutuamente exclusivos: a mesma alternativa
+    não pode valer como principal e complementar para a mesma carreira.
+    """
+
+    codigo_trilha: str
+    nome_trilha: str
+    matematica: int
+    atuacao: int
+    ferramenta_principal: int
+    ferramenta_complementar: int
+    entrega: int
+
+    @property
+    def total(self) -> int:
+        return (
+            self.matematica
+            + self.atuacao
+            + self.ferramenta_principal
+            + self.ferramenta_complementar
+            + self.entrega
+        )
 
 
 class PerfilUsuario(Fact):
@@ -28,11 +63,12 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa as 30 regras declaradas."""
+    """Executa as 30 regras e calcula a pontuação independente dos disparos."""
 
     def __init__(self) -> None:
         super().__init__()
         self.regras_disparadas: list[Regra] = []
+        self._respostas_atuais: dict[str, str] | None = None
 
     def registrar_perfil(self, respostas: dict[str, str]) -> None:
         """Valida respostas e declara exatamente um fato PerfilUsuario.
@@ -64,6 +100,7 @@ class MotorInferencia(KnowledgeEngine):
         self.reset()
         self.regras_disparadas.clear()
         self.declare(PerfilUsuario(**respostas))
+        self._respostas_atuais = dict(respostas)
 
     def _registrar_disparo(self, numero: int) -> None:
         """Guarda a regra aprovada na Fase 1, incluindo seu motivo original."""
@@ -84,6 +121,48 @@ class MotorInferencia(KnowledgeEngine):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
         if regra.numero not in {item.numero for item in self.regras_disparadas}:
             self.regras_disparadas.append(regra)
+
+    def calcular_pontuacoes(self) -> tuple[PontuacaoTrilha, ...]:
+        """Aplica a matriz de pesos da Fase 1 às quatro respostas do perfil.
+
+        O resultado contém as dez carreiras na ordem da base declarativa.
+        Cada pergunta contribui no máximo uma vez para cada trilha;
+        regras disparadas servem para registrar evidências, não para
+        multiplicar pontos. Não decide a carreira vencedora nem desempata.
+        """
+        if self._respostas_atuais is None:
+            raise RuntimeError("Registre um perfil antes de calcular pontuações.")
+
+        respostas = self._respostas_atuais
+        pontuacoes: list[PontuacaoTrilha] = []
+        for trilha in TRILHAS:
+            ferramenta = respostas["ferramenta"]
+            principal = (
+                PESOS_PONTUACAO["ferramenta_principal"]
+                if ferramenta in trilha.ferramentas_principais else 0
+            )
+            complementar = (
+                PESOS_PONTUACAO["ferramenta_complementar"]
+                if ferramenta in trilha.ferramentas_complementares else 0
+            )
+            pontuacoes.append(
+                PontuacaoTrilha(
+                    codigo_trilha=trilha.codigo,
+                    nome_trilha=trilha.nome,
+                    matematica=trilha.matematica.get(respostas["matematica"], 0),
+                    atuacao=(
+                        PESOS_PONTUACAO["atuacao_correspondente"]
+                        if respostas["atuacao"] == trilha.atuacao else 0
+                    ),
+                    ferramenta_principal=principal,
+                    ferramenta_complementar=complementar,
+                    entrega=(
+                        PESOS_PONTUACAO["entrega_correspondente"]
+                        if respostas["entrega"] == trilha.entrega else 0
+                    ),
+                )
+            )
+        return tuple(pontuacoes)
 
     # Regra 1: atuação em algoritmos/APIs E afinidade com Java/C#.
     @Rule(PerfilUsuario(atuacao="logica", ferramenta="java"))
@@ -985,5 +1064,98 @@ if __name__ == "__main__":
     assert ids == [28, 29, 30], f"Registro das regras de Gestão de Produtos incorreto: {ids}."
     assert all(regra.motivo for regra in motor.regras_disparadas), "Faltam justificativas."
     print("Regras de Gestão de Produtos 28, 29 e 30 validadas nos exemplos!")
-    print("Todas as 30 regras cadastradas. Pontuação, desempate e recomendações: próximas etapas.")
+    print("Todas as 30 regras cadastradas e validadas nos exemplos!")
+
+    # Pontuação: cada resposta contribui uma vez por carreira, independentemente
+    # da quantidade de regras disparadas. A validação usa os pesos da Fase 1.
+    sem_perfil = MotorInferencia()
+    try:
+        sem_perfil.calcular_pontuacoes()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Pontuação sem perfil deveria falhar.")
+
+    casos_pontuacao = (
+        (
+            "Back-end completo",
+            {"matematica": "media", "atuacao": "logica",
+             "ferramenta": "java", "entrega": "funcionalidade"},
+            "backend", (1, 5, 3, 0, 5), 14,
+        ),
+        (
+            "Front-end completo",
+            {"matematica": "baixa", "atuacao": "interfaces",
+             "ferramenta": "javascript", "entrega": "experiencia"},
+            "frontend_uiux", (0, 5, 3, 0, 5), 13,
+        ),
+        (
+            "Ciência de Dados com matemática alta",
+            {"matematica": "alta", "atuacao": "analise",
+             "ferramenta": "python", "entrega": "inteligencia"},
+            "ciencia_dados_ml", (2, 5, 3, 0, 5), 15,
+        ),
+        (
+            "QA iniciante sem ferramenta",
+            {"matematica": "baixa", "atuacao": "qa",
+             "ferramenta": "nenhuma", "entrega": "qualidade"},
+            "engenharia_qa", (0, 5, 0, 0, 5), 10,
+        ),
+        (
+            "Cloud com matemática baixa",
+            {"matematica": "baixa", "atuacao": "cloud",
+             "ferramenta": "cloud", "entrega": "infraestrutura"},
+            "cloud_architecture", (0, 5, 3, 0, 5), 13,
+        ),
+        (
+            "Mobile sem pontuação matemática",
+            {"matematica": "alta", "atuacao": "mobile",
+             "ferramenta": "mobile", "entrega": "mobile"},
+            "desenvolvimento_mobile", (0, 5, 3, 0, 5), 13,
+        ),
+    )
+    for nome, respostas, codigo, componentes, total_esperado in casos_pontuacao:
+        motor.registrar_perfil(respostas)
+        motor.run()
+        resultados = motor.calcular_pontuacoes()
+        assert len(resultados) == 10, "Pontuação deve incluir as 10 carreiras."
+        assert len({p.codigo_trilha for p in resultados}) == 10
+        pontos = next(p for p in resultados if p.codigo_trilha == codigo)
+        detalhamento = (
+            pontos.matematica, pontos.atuacao,
+            pontos.ferramenta_principal, pontos.ferramenta_complementar,
+            pontos.entrega,
+        )
+        assert detalhamento == componentes, (
+            f"{nome}: esperado {componentes}, obtido {detalhamento}."
+        )
+        assert pontos.total == total_esperado, (
+            f"{nome}: esperado {total_esperado} pontos, obtido {pontos.total}."
+        )
+        assert all(p.ferramenta_principal == 0 or p.ferramenta_complementar == 0
+                   for p in resultados), "Ferramenta não pode pontuar em duas classes."
+        print(f"Pontuação validada — {nome}: {pontos.total} pontos.")
+
+    # Empate que será resolvido somente na etapa futura de desempate.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    motor.run()
+    pontuacoes = {p.codigo_trilha: p for p in motor.calcular_pontuacoes()}
+    assert pontuacoes["devops_sre"].total == 7
+    assert pontuacoes["cloud_architecture"].total == 7
+    print("Empate DevOps/Cloud validado: 7 pontos para cada; sem desempate nesta etapa.")
+
+    # Ao registrar um novo perfil, a pontuação anterior não pode persistir.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "negocios",
+    })
+    motor.run()
+    pontuacoes = {p.codigo_trilha: p for p in motor.calcular_pontuacoes()}
+    assert pontuacoes["gestao_produtos"].total == 13
+    assert pontuacoes["devops_sre"].total == 0
+    print("Registro de novo perfil e ausência de pontuação duplicada: validados!")
+    print("Sistema de pontuação validado nos exemplos! Desempate e recomendação: próximas etapas.")
 
