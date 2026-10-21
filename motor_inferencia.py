@@ -1,11 +1,12 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.78.
+Atividade Aula 08 — Fase 2, etapa 2.84.
 
 Preserva as trinta regras Experta e seus cenários de teste. Calcula a
 pontuação de cada trilha a partir das quatro respostas e dos pesos da
 Fase 1, sem duplicar pontos por quantidade de regras disparadas.
-Desempate, seleção da carreira e recomendação final: próximas etapas.
+Aplica os quatro critérios de desempate aprovados, apenas às trilhas
+empatadas na maior pontuação. Recomendação final: etapa posterior.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from experta import OR, Fact, KnowledgeEngine, Rule
 
 from base_conhecimento import (
     PERGUNTAS,
+    ORDEM_DESEMPATE,
     PESOS_PONTUACAO,
     REGRAS,
     TRILHAS,
@@ -56,6 +58,20 @@ class PontuacaoTrilha:
             + self.ferramenta_complementar
             + self.entrega
         )
+
+
+@dataclass(frozen=True)
+class ResultadoDesempate:
+    """Desempate entre as carreiras com a mesma maior pontuação.
+
+    Identifica qual critério aprovado separou os candidatos. Não gera,
+    por si só, uma recomendação ao usuário nem constrói justificativas.
+    """
+
+    candidatos_originais: tuple[str, ...]
+    codigo_selecionado: str
+    pontuacao_empatada: int
+    criterio_decisivo: str
 
 
 class PerfilUsuario(Fact):
@@ -163,6 +179,53 @@ class MotorInferencia(KnowledgeEngine):
                 )
             )
         return tuple(pontuacoes)
+
+    def resolver_desempate(self) -> ResultadoDesempate | None:
+        """Desempata apenas as carreiras com a maior pontuação total.
+
+        Retorna ``None`` se houver um único primeiro colocado, pois nesse
+        caso não há empate a resolver. Não produz recomendação final.
+        """
+        return self._desempatar_pontuacoes(self.calcular_pontuacoes())
+
+    @staticmethod
+    def _desempatar_pontuacoes(
+        pontuacoes: tuple[PontuacaoTrilha, ...],
+    ) -> ResultadoDesempate | None:
+        """Aplica a ORDEM_DESEMPATE, sem alterar pontos ou regras disparadas.
+
+        O método separado permite testar cada prioridade mesmo quando os
+        perfis reais normalmente desempatem já pela preferência de atuação.
+        """
+        if not pontuacoes:
+            raise ValueError("A lista de pontuações não pode estar vazia.")
+
+        maior_total = max(item.total for item in pontuacoes)
+        empatadas = [item for item in pontuacoes if item.total == maior_total]
+        if len(empatadas) == 1:
+            return None
+
+        candidatos_originais = tuple(item.codigo_trilha for item in empatadas)
+        for criterio in ORDEM_DESEMPATE:
+            maior_criterio = max(getattr(item, criterio) for item in empatadas)
+            empatadas = [
+                item for item in empatadas
+                if getattr(item, criterio) == maior_criterio
+            ]
+            if len(empatadas) == 1:
+                return ResultadoDesempate(
+                    candidatos_originais=candidatos_originais,
+                    codigo_selecionado=empatadas[0].codigo_trilha,
+                    pontuacao_empatada=maior_total,
+                    criterio_decisivo=criterio,
+                )
+
+        # Não introduz uma quinta prioridade ou a ordem de cadastro como
+        # desempate implícito. Caso impossível nos perfis atuais da Fase 1.
+        raise RuntimeError(
+            "Empate persistente após todos os critérios aprovados: "
+            + ", ".join(item.codigo_trilha for item in empatadas)
+        )
 
     # Regra 1: atuação em algoritmos/APIs E afinidade com Java/C#.
     @Rule(PerfilUsuario(atuacao="logica", ferramenta="java"))
@@ -1157,5 +1220,84 @@ if __name__ == "__main__":
     assert pontuacoes["gestao_produtos"].total == 13
     assert pontuacoes["devops_sre"].total == 0
     print("Registro de novo perfil e ausência de pontuação duplicada: validados!")
-    print("Sistema de pontuação validado nos exemplos! Desempate e recomendação: próximas etapas.")
+    print("Sistema de pontuação validado nos exemplos! Recomendação: etapa futura.")
+
+    # Desempate real: DevOps e Cloud têm sete pontos. A preferência de
+    # atuação da pergunta 2 deve priorizar DevOps sem alterar os pontos.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    motor.run()
+    antes_regras = tuple(motor.regras_disparadas)
+    antes_pontuacoes = motor.calcular_pontuacoes()
+    resultado = motor.resolver_desempate()
+    assert resultado is not None
+    assert resultado.codigo_selecionado == "devops_sre"
+    assert resultado.criterio_decisivo == "atuacao"
+    assert resultado.pontuacao_empatada == 7
+    assert set(resultado.candidatos_originais) == {"devops_sre", "cloud_architecture"}
+    assert motor.calcular_pontuacoes() == antes_pontuacoes
+    assert tuple(motor.regras_disparadas) == antes_regras
+    print("Desempate real DevOps/Cloud: atuação priorizou DevOps (7 pontos cada).")
+
+    # Sem empate na maior pontuação, o método não altera a classificação.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "analise",
+        "ferramenta": "python", "entrega": "inteligencia",
+    })
+    motor.run()
+    assert motor.resolver_desempate() is None
+    print("Perfil sem empate: nenhum desempate aplicado (correto).")
+
+    # Testes isolados para as quatro prioridades, com totais empatados.
+    # Os perfis reais normalmente se resolvem logo pela atuação (P2).
+    # As pontuações artificiais abaixo validam o restante da ordem.
+    def pontos(codigo: str, *, mat: int = 0, atu: int = 0,
+               principal: int = 0, complementar: int = 0,
+               entrega: int = 0) -> PontuacaoTrilha:
+        return PontuacaoTrilha(
+            codigo_trilha=codigo, nome_trilha=codigo,
+            matematica=mat, atuacao=atu,
+            ferramenta_principal=principal,
+            ferramenta_complementar=complementar, entrega=entrega,
+        )
+
+    cenarios_isolados = (
+        (
+            "entrega",
+            (pontos("ganhador", entrega=5), pontos("outro", mat=2, principal=3)),
+        ),
+        (
+            "ferramenta_principal",
+            (pontos("ganhador", principal=3),
+             pontos("outro", mat=2, complementar=1)),
+        ),
+        (
+            "matematica",
+            (pontos("ganhador", mat=2),
+             pontos("outro", mat=1, complementar=1)),
+        ),
+    )
+    for criterio, pontuacoes_teste in cenarios_isolados:
+        empate = MotorInferencia._desempatar_pontuacoes(pontuacoes_teste)
+        assert empate is not None
+        assert empate.criterio_decisivo == criterio
+        assert empate.codigo_selecionado == "ganhador"
+        assert empate.pontuacao_empatada == pontuacoes_teste[0].total
+        print(f"Critério de desempate isolado validado: {criterio}.")
+
+    # Sem correspondência em nenhuma das quatro prioridades, sinaliza
+    # impossibilidade em vez de escolher arbitrariamente uma carreira.
+    try:
+        MotorInferencia._desempatar_pontuacoes(
+            (pontos("a", principal=3), pontos("b", principal=3))
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Empate persistente deve ser sinalizado.")
+    print("Empate persistente: erro explícito validado (sem critério extra).")
+    print("Quatro prioridades aprovadas de desempate validadas nos exemplos!")
+    print("Recomendação final com justificativas: próxima etapa.")
 
