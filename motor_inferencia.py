@@ -1,12 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.48.
+Atividade Aula 08 — Fase 2, etapa 2.54.
 
-Esta entrega preserva as regras de Back-end (1 a 3), Front-end & UI/UX
-(4 a 6), Ciência de Dados e ML (7 a 9), Engenharia de Dados (10 a 12) e
-Cibersegurança (13 a 15), acrescentando DevOps & SRE (16 a 18).
+Preserva as regras 1 a 18 das seis trilhas anteriores e acrescenta as
+regras 19 a 21 de Computação em Nuvem (Cloud Architecture).
 Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 12 regras ficam para etapas posteriores.
+desempate e as outras 9 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 18."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 21."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -76,6 +75,7 @@ class MotorInferencia(KnowledgeEngine):
             10: "engenharia_dados", 11: "engenharia_dados", 12: "engenharia_dados",
             13: "ciberseguranca", 14: "ciberseguranca", 15: "ciberseguranca",
             16: "devops_sre", 17: "devops_sre", 18: "devops_sre",
+            19: "cloud_architecture", 20: "cloud_architecture", 21: "cloud_architecture",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -197,6 +197,30 @@ class MotorInferencia(KnowledgeEngine):
     @Rule(PerfilUsuario(ferramenta="devops", entrega="automacao"))
     def regra_18_devops_sre(self) -> None:
         self._registrar_disparo(18)
+
+
+    # Regra 19: interesse em infraestrutura de nuvem E afinidade com AWS/Azure/GCP.
+    @Rule(PerfilUsuario(atuacao="cloud", ferramenta="cloud"))
+    def regra_19_cloud_architecture(self) -> None:
+        self._registrar_disparo(19)
+
+    # Regra 20: atuação em arquitetura de nuvem E entrega de infraestrutura escalável.
+    @Rule(PerfilUsuario(atuacao="cloud", entrega="infraestrutura"))
+    def regra_20_cloud_architecture(self) -> None:
+        self._registrar_disparo(20)
+
+    # Regra 21: matemática Média OU Alta, Linux/Redes OU Docker/CI-CD,
+    # e entrega de infraestrutura escalável/estável/disponível.
+    @Rule(
+        OR(
+            PerfilUsuario(matematica="media", ferramenta="redes", entrega="infraestrutura"),
+            PerfilUsuario(matematica="alta", ferramenta="redes", entrega="infraestrutura"),
+            PerfilUsuario(matematica="media", ferramenta="devops", entrega="infraestrutura"),
+            PerfilUsuario(matematica="alta", ferramenta="devops", entrega="infraestrutura"),
+        )
+    )
+    def regra_21_cloud_architecture(self) -> None:
+        self._registrar_disparo(21)
 
 
 if __name__ == "__main__":
@@ -545,4 +569,87 @@ if __name__ == "__main__":
     print("Perfil Python sem foco em DevOps: nenhuma regra disparada.")
 
     print("Regras de DevOps & SRE 16, 17 e 18 validadas nos exemplos!")
-    print("Outras 12 regras, pontuação e recomendações: etapas futuras.")
+    # AWS/Azure/GCP + atuação em nuvem + entrega de infraestrutura: 19 e 20.
+    # Não ativa 21, que exige ferramenta complementar Linux/Redes ou Docker/CI-CD.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "cloud",
+        "ferramenta": "cloud", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [19, 20], f"Cloud completo: esperado [19, 20], obtido {numeros}."
+    print(f"Perfil Cloud com AWS/Azure/GCP: regras disparadas {numeros}.")
+
+    # Infraestrutura em nuvem + AWS/Azure/GCP, sem entrega de infraestrutura: 19.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "cloud",
+        "ferramenta": "cloud", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [19], f"Cloud/AWS sem entrega: esperado [19], obtido {numeros}."
+    print(f"Perfil Cloud com AWS sem entrega de infraestrutura: regras disparadas {numeros}.")
+
+    # Atuação em Cloud + entrega de infraestrutura, sem ferramenta Cloud: 20.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "cloud",
+        "ferramenta": "gestao", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [20], f"Cloud/infraestrutura: esperado [20], obtido {numeros}."
+    print(f"Perfil Cloud com foco em escalabilidade: regras disparadas {numeros}.")
+
+    # Linux/Redes + matemática média + infraestrutura, sem atuação em nuvem: 21.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [21], f"Redes e infraestrutura: esperado [21], obtido {numeros}."
+    print(f"Perfil Linux/Redes e infraestrutura: regras disparadas {numeros}.")
+
+    # Docker/Kubernetes/CI-CD + matemática alta + infraestrutura: 21.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "devops", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [21], f"Docker e infraestrutura: esperado [21], obtido {numeros}."
+    print(f"Perfil Docker/CI-CD e infraestrutura: regras disparadas {numeros}.")
+
+    # Atuação Cloud + Linux/Redes + matemática média + infraestrutura: 20 e 21.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "cloud",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [20, 21], f"Cloud/Redes: esperado [20, 21], obtido {numeros}."
+    print(f"Perfil Cloud com Linux/Redes: regras disparadas {numeros}.")
+
+    # Matemática baixa não satisfaz a regra 21.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Matemática baixa não deve disparar 21: {numeros}."
+    print("Perfil Redes, matemática baixa, sem atuar em Cloud: nenhuma regra disparada.")
+
+    # Ferramenta AWS/Azure/GCP isolada não dispara regras Cloud.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "cloud", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"AWS isolado não deve disparar regras: {numeros}."
+    print("Perfil apenas com AWS/Azure/GCP: nenhuma regra disparada.")
+
+    print("Regras de Cloud Architecture 19, 20 e 21 validadas nos exemplos!")
+    print("Outras 9 regras, pontuação e recomendações: etapas futuras.")
+
