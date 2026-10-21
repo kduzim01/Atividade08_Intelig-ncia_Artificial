@@ -1,11 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.30.
+Atividade Aula 08 — Fase 2, etapa 2.36.
 
-Esta entrega preserva as regras de Desenvolvimento Back-end (1 a 3) e
-Front-end & UI/UX (4 a 6), acrescentando apenas Ciência de Dados (7 a 9).
+Esta entrega preserva Back-end (1 a 3), Front-end & UI/UX (4 a 6) e
+Ciência de Dados e ML (7 a 9), acrescentando Engenharia de Dados (10 a 12).
 Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 21 regras ficam para etapas posteriores.
+desempate e as outras 18 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 9."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 12."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -72,6 +72,7 @@ class MotorInferencia(KnowledgeEngine):
             1: "backend", 2: "backend", 3: "backend",
             4: "frontend_uiux", 5: "frontend_uiux", 6: "frontend_uiux",
             7: "ciencia_dados_ml", 8: "ciencia_dados_ml", 9: "ciencia_dados_ml",
+            10: "engenharia_dados", 11: "engenharia_dados", 12: "engenharia_dados",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -134,6 +135,28 @@ class MotorInferencia(KnowledgeEngine):
     def regra_09_ciencia_dados_ml(self) -> None:
         self._registrar_disparo(9)
 
+
+    # Regra 10: atuação em pipelines/Engenharia de Dados E ferramenta SQL.
+    @Rule(PerfilUsuario(atuacao="engenharia_dados", ferramenta="sql"))
+    def regra_10_engenharia_dados(self) -> None:
+        self._registrar_disparo(10)
+
+    # Regra 11: atuação em pipelines E entrega de dados integrados/disponíveis.
+    @Rule(PerfilUsuario(atuacao="engenharia_dados", entrega="dados"))
+    def regra_11_engenharia_dados(self) -> None:
+        self._registrar_disparo(11)
+
+    # Regra 12: matemática Média OU Alta E Python OU Docker/CI-CD E entrega de dados.
+    @Rule(
+        OR(
+            PerfilUsuario(matematica="media", ferramenta="python", entrega="dados"),
+            PerfilUsuario(matematica="alta", ferramenta="python", entrega="dados"),
+            PerfilUsuario(matematica="media", ferramenta="devops", entrega="dados"),
+            PerfilUsuario(matematica="alta", ferramenta="devops", entrega="dados"),
+        )
+    )
+    def regra_12_engenharia_dados(self) -> None:
+        self._registrar_disparo(12)
 
 if __name__ == "__main__":
     motor = MotorInferencia()
@@ -276,4 +299,65 @@ if __name__ == "__main__":
     assert not numeros, f"Matemática baixa não deveria disparar regras: {numeros}."
     print("Perfil Python, matemática baixa e sem análise: nenhuma regra disparada.")
     print("Regras de Ciência de Dados e ML 7, 8 e 9 validadas nos exemplos!")
-    print("Outras 21 regras, pontuação e recomendações: etapas futuras.")
+    # Engenharia de Dados + SQL + entrega de dados: regras 10 e 11.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "engenharia_dados",
+        "ferramenta": "sql", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [10, 11], f"Engenharia de Dados/SQL: esperado [10, 11], obtido {numeros}."
+    print(f"Perfil Engenharia de Dados com SQL: regras disparadas {numeros}.")
+
+    # SQL + interesse em pipelines, sem entrega de dados: apenas regra 10.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "engenharia_dados",
+        "ferramenta": "sql", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [10], f"Pipelines/SQL: esperado [10], obtido {numeros}."
+    print(f"Perfil pipelines com SQL: regras disparadas {numeros}.")
+
+    # Atuação em pipelines + entrega de dados: regra 11 (sem ferramentas associadas).
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "engenharia_dados",
+        "ferramenta": "gestao", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [11], f"Pipelines/integração: esperado [11], obtido {numeros}."
+    print(f"Perfil pipelines e integração de dados: regras disparadas {numeros}.")
+
+    # Python + matemática média + entrega de dados e interesse em pipelines: 11 e 12.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "engenharia_dados",
+        "ferramenta": "python", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [11, 12], f"Python/dados: esperado [11, 12], obtido {numeros}."
+    print(f"Perfil Engenharia de Dados com Python: regras disparadas {numeros}.")
+
+    # Docker/CI-CD + matemática alta + entrega de dados: regra 12 sem atuar em pipelines.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "devops", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [12], f"Docker/dados: esperado [12], obtido {numeros}."
+    print(f"Perfil Docker/CI-CD e integração de dados: regras disparadas {numeros}.")
+
+    # Afinidade matemática baixa não satisfaz a regra 12.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Matemática baixa não deveria disparar regra: {numeros}."
+    print("Perfil Python e integração de dados, matemática baixa: nenhuma regra disparada.")
+
+    print("Regras de Engenharia de Dados 10, 11 e 12 validadas nos exemplos!")
+    print("Outras 18 regras, pontuação e recomendações: etapas futuras.")
