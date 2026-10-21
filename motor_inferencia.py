@@ -1,11 +1,12 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.36.
+Atividade Aula 08 — Fase 2, etapa 2.42.
 
-Esta entrega preserva Back-end (1 a 3), Front-end & UI/UX (4 a 6) e
-Ciência de Dados e ML (7 a 9), acrescentando Engenharia de Dados (10 a 12).
-Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 18 regras ficam para etapas posteriores.
+Esta entrega preserva as regras de Back-end (1 a 3), Front-end & UI/UX
+(4 a 6), Ciência de Dados e ML (7 a 9) e Engenharia de Dados (10 a 12),
+acrescentando Cibersegurança (13 a 15). Os disparos são registrados para
+futuras justificativas. Pontuação, desempate e as outras 15 regras ficam
+para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 12."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 15."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -73,6 +74,7 @@ class MotorInferencia(KnowledgeEngine):
             4: "frontend_uiux", 5: "frontend_uiux", 6: "frontend_uiux",
             7: "ciencia_dados_ml", 8: "ciencia_dados_ml", 9: "ciencia_dados_ml",
             10: "engenharia_dados", 11: "engenharia_dados", 12: "engenharia_dados",
+            13: "ciberseguranca", 14: "ciberseguranca", 15: "ciberseguranca",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -157,6 +159,29 @@ class MotorInferencia(KnowledgeEngine):
     )
     def regra_12_engenharia_dados(self) -> None:
         self._registrar_disparo(12)
+
+    # Regra 13: atuação em vulnerabilidades/proteção E afinidade com Linux/Redes.
+    @Rule(PerfilUsuario(atuacao="seguranca", ferramenta="redes"))
+    def regra_13_ciberseguranca(self) -> None:
+        self._registrar_disparo(13)
+
+    # Regra 14: atuação em vulnerabilidades E entrega de proteção de sistemas.
+    @Rule(PerfilUsuario(atuacao="seguranca", entrega="seguranca"))
+    def regra_14_ciberseguranca(self) -> None:
+        self._registrar_disparo(14)
+
+    # Regra 15: Linux/Redes OU Python, matemática Média OU Alta e entrega de proteção.
+    @Rule(
+        OR(
+            PerfilUsuario(matematica="media", ferramenta="redes", entrega="seguranca"),
+            PerfilUsuario(matematica="alta", ferramenta="redes", entrega="seguranca"),
+            PerfilUsuario(matematica="media", ferramenta="python", entrega="seguranca"),
+            PerfilUsuario(matematica="alta", ferramenta="python", entrega="seguranca"),
+        )
+    )
+    def regra_15_ciberseguranca(self) -> None:
+        self._registrar_disparo(15)
+
 
 if __name__ == "__main__":
     motor = MotorInferencia()
@@ -360,4 +385,76 @@ if __name__ == "__main__":
     print("Perfil Python e integração de dados, matemática baixa: nenhuma regra disparada.")
 
     print("Regras de Engenharia de Dados 10, 11 e 12 validadas nos exemplos!")
-    print("Outras 18 regras, pontuação e recomendações: etapas futuras.")
+
+    # Segurança completa: Linux/Redes + vulnerabilidades + proteção; regras 13, 14 e 15.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "seguranca",
+        "ferramenta": "redes", "entrega": "seguranca",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [13, 14, 15], f"Cibersegurança: esperado [13, 14, 15], obtido {numeros}."
+    print(f"Perfil completo de Cibersegurança: regras disparadas {numeros}.")
+
+    # Interesse em vulnerabilidades + Linux/Redes, sem entrega de proteção: apenas 13.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "seguranca",
+        "ferramenta": "redes", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [13], f"Vulnerabilidades/Redes: esperada [13], obtido {numeros}."
+    print(f"Perfil vulnerabilidades com Linux/Redes: regras disparadas {numeros}.")
+
+    # Interesse em vulnerabilidades e entrega de proteção sem Linux/Python: apenas 14.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "seguranca",
+        "ferramenta": "gestao", "entrega": "seguranca",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [14], f"Proteção de sistemas: esperada [14], obtido {numeros}."
+    print(f"Perfil vulnerabilidades e proteção: regras disparadas {numeros}.")
+
+    # Python e matemática alta com entrega de proteção, sem atuação em segurança: apenas 15.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "seguranca",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [15], f"Python/proteção: esperada [15], obtido {numeros}."
+    print(f"Perfil Python e proteção, matemática alta: regras disparadas {numeros}.")
+
+    # Linux/Redes e matemática média com entrega de proteção, sem atuação em segurança.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "redes", "entrega": "seguranca",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [15], f"Redes/proteção: esperada [15], obtido {numeros}."
+    print(f"Perfil Linux/Redes e proteção, matemática média: regras disparadas {numeros}.")
+
+    # Matemática baixa não satisfaz a regra 15 sem atuação em segurança.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "seguranca",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Matemática baixa sem atuação em segurança: obtido {numeros}."
+    print("Perfil Python, matemática baixa e sem atuação em segurança: nenhuma regra disparada.")
+
+    # Afinidade com redes isolada não deve gerar regra de Cibersegurança.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "redes", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Redes isoladas: nenhuma regra esperada; obtido {numeros}."
+    print("Perfil apenas com Linux/Redes: nenhuma regra disparada.")
+
+    print("Regras de Cibersegurança 13, 14 e 15 validadas nos exemplos!")
+    print("Outras 15 regras, pontuação e recomendações: etapas futuras.")
