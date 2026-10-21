@@ -1,11 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.66.
+Atividade Aula 08 — Fase 2, etapa 2.72.
 
-Preserva integralmente as regras 1 a 24 e acrescenta as regras 25 a 27 de
-Engenharia de Qualidade e Testes (QA). Os disparos são registrados para
-futuras justificativas. Pontuação, desempate e as demais 3 regras ficam
-para etapas posteriores.
+Preserva integralmente as regras 1 a 27 e acrescenta as regras 28 a 30 de
+Gestão de Produtos (Product Management). Os disparos são registrados para
+futuras justificativas. Pontuação, desempate e recomendações serão
+implementados em etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 27."""
+    """Motor Experta: nesta etapa, executa as 30 regras declaradas."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -78,6 +78,7 @@ class MotorInferencia(KnowledgeEngine):
             19: "cloud_architecture", 20: "cloud_architecture", 21: "cloud_architecture",
             22: "desenvolvimento_mobile", 23: "desenvolvimento_mobile", 24: "desenvolvimento_mobile",
             25: "engenharia_qa", 26: "engenharia_qa", 27: "engenharia_qa",
+            28: "gestao_produtos", 29: "gestao_produtos", 30: "gestao_produtos",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -268,6 +269,22 @@ class MotorInferencia(KnowledgeEngine):
         self._registrar_disparo(27)
 
 
+    # Regra 28: atuação em planejamento de produtos E Jira/Trello/Figma.
+    @Rule(PerfilUsuario(atuacao="produto", ferramenta="gestao"))
+    def regra_28_gestao_produtos(self) -> None:
+        self._registrar_disparo(28)
+
+    # Regra 29: atuação em produtos E entrega de estratégias de negócio.
+    @Rule(PerfilUsuario(atuacao="produto", entrega="negocios"))
+    def regra_29_gestao_produtos(self) -> None:
+        self._registrar_disparo(29)
+
+    # Regra 30: ferramentas Jira/Trello/Figma E entrega de negócios.
+    @Rule(PerfilUsuario(ferramenta="gestao", entrega="negocios"))
+    def regra_30_gestao_produtos(self) -> None:
+        self._registrar_disparo(30)
+
+
 if __name__ == "__main__":
     motor = MotorInferencia()
 
@@ -330,14 +347,15 @@ if __name__ == "__main__":
     assert numeros == [4, 5], f"Front-end com JavaScript: esperado [4, 5], obtido {numeros}."
     print(f"Perfil Front-end com JavaScript: regras disparadas {numeros}.")
 
-    # Ferramentas de gestão/design + entrega visual: regra 6, mesmo sem atuação em interfaces.
+    # Ferramentas de design + experiência acionam a regra 6; atuação em produto e
+    # ferramenta de gestão também acionam legitimamente a nova regra 28.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "produto",
         "ferramenta": "gestao", "entrega": "experiencia",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert numeros == [6], f"Ferramenta de design: esperada [6], obtida {numeros}."
+    assert numeros == [6, 28], f"Design e planejamento: esperado [6, 28], obtido {numeros}."
     print(f"Perfil com Jira/Trello/Figma e experiência: regras disparadas {numeros}.")
 
     # Atuação em interfaces + ferramentas de gestão/design + experiência: regras 5 e 6.
@@ -350,15 +368,16 @@ if __name__ == "__main__":
     assert numeros == [5, 6], f"Interfaces e design: esperado [5, 6], obtido {numeros}."
     print(f"Perfil de interfaces com Figma: regras disparadas {numeros}.")
 
-    # JavaScript, isoladamente, não pode ativar regra Front-end.
+    # JavaScript sem atuação em interfaces não ativa Front-end;
+    # atuar em Produtos + entrega de negócios passa a disparar regra 29.
     motor.registrar_perfil({
         "matematica": "baixa", "atuacao": "produto",
         "ferramenta": "javascript", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"JavaScript isolado não deve disparar regras: {numeros}."
-    print("Perfil com JavaScript, sem foco em interfaces: nenhuma regra disparada.")
+    assert numeros == [29], f"Sem Front-end, mas com gestão de produto: esperado [29], obtido {numeros}."
+    print("Perfil com JavaScript, sem foco em interfaces: nenhuma regra Front-end; regra 29 de Produtos disparada.")
     print("Regras de Front-end & UI/UX 4, 5 e 6 validadas nos exemplos!")
 
     # Alta afinidade matemática + análise + Python + previsões: regras 7, 8 e 9.
@@ -533,15 +552,16 @@ if __name__ == "__main__":
     assert not numeros, f"Matemática baixa sem atuação em segurança: obtido {numeros}."
     print("Perfil Python, matemática baixa e sem atuação em segurança: nenhuma regra disparada.")
 
-    # Afinidade com redes isolada não deve gerar regra de Cibersegurança.
+    # Redes sem atuação em segurança não geram regras de Cibersegurança;
+    # atuação em Produtos e entrega de negócios ativam regra 29.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "produto",
         "ferramenta": "redes", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"Redes isoladas: nenhuma regra esperada; obtido {numeros}."
-    print("Perfil apenas com Linux/Redes: nenhuma regra disparada.")
+    assert numeros == [29], f"Redes sem segurança, com atuação em Produtos: esperado [29], obtido {numeros}."
+    print("Perfil com Linux/Redes e foco em Produtos: nenhuma regra Cibersegurança; regra 29 disparada.")
 
     print("Regras de Cibersegurança 13, 14 e 15 validadas nos exemplos!")
 
@@ -595,15 +615,16 @@ if __name__ == "__main__":
     assert numeros == [17], f"DevOps/Redes: esperado [17], obtido {numeros}."
     print(f"Perfil DevOps com Linux/Redes: regras disparadas {numeros}.")
 
-    # Apenas afinidade com Docker/CI-CD não deve disparar regra DevOps.
+    # Docker/CI-CD sem atuação/entrega DevOps não deve ativar DevOps;
+    # atuação em Produtos e entrega de negócios ativam regra 29.
     motor.registrar_perfil({
         "matematica": "baixa", "atuacao": "produto",
         "ferramenta": "devops", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"Docker/CI-CD isolado não deve ativar regras: {numeros}."
-    print("Perfil apenas com Docker/CI-CD: nenhuma regra disparada.")
+    assert numeros == [29], f"Docker sem DevOps, com foco em Produtos: esperado [29], obtido {numeros}."
+    print("Perfil Docker/CI-CD com foco em Produtos: nenhuma regra DevOps; regra 29 disparada.")
 
     # Python e entrega de automação sem atuação DevOps também não bastam.
     motor.registrar_perfil({
@@ -687,15 +708,16 @@ if __name__ == "__main__":
     assert not numeros, f"Matemática baixa não deve disparar 21: {numeros}."
     print("Perfil Redes, matemática baixa, sem atuar em Cloud: nenhuma regra disparada.")
 
-    # Ferramenta AWS/Azure/GCP isolada não dispara regras Cloud.
+    # AWS/Azure/GCP sem atuação/entrega Cloud não dispara regras Cloud;
+    # atuar em Produtos e entregar negócio aciona regra 29.
     motor.registrar_perfil({
         "matematica": "alta", "atuacao": "produto",
         "ferramenta": "cloud", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"AWS isolado não deve disparar regras: {numeros}."
-    print("Perfil apenas com AWS/Azure/GCP: nenhuma regra disparada.")
+    assert numeros == [29], f"AWS sem Cloud, com foco em Produtos: esperado [29], obtido {numeros}."
+    print("Perfil AWS/Azure/GCP com foco em Produtos: nenhuma regra Cloud; regra 29 disparada.")
 
     print("Regras de Cloud Architecture 19, 20 e 21 validadas nos exemplos!")
     # Perfil completo Mobile: atuação, tecnologia específica e entrega de apps.
@@ -758,15 +780,16 @@ if __name__ == "__main__":
     assert numeros == [23, 24], f"Mobile/JavaScript: esperado [23, 24], obtido {numeros}."
     print(f"Perfil Mobile com JavaScript e entrega de apps: regras disparadas {numeros}.")
 
-    # Uma ferramenta Mobile isolada NÃO basta para recomendar a trilha.
+    # Ferramenta Mobile sem atuação/entrega Mobile NÃO dispara regras Mobile;
+    # atuação em Produtos e entrega de negócio ativam regra 29.
     motor.registrar_perfil({
         "matematica": "baixa", "atuacao": "produto",
         "ferramenta": "mobile", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"Ferramenta Mobile isolada não deve disparar regra: {numeros}."
-    print("Perfil apenas com tecnologias Mobile: nenhuma regra disparada.")
+    assert numeros == [29], f"Ferramenta Mobile sem foco Mobile, com gestão de produto: esperado [29], obtido {numeros}."
+    print("Perfil tecnologia Mobile com foco em Produtos: nenhuma regra Mobile; regra 29 disparada.")
 
     # Entrega Mobile isolada também não satisfaz as regras cruzadas.
     motor.registrar_perfil({
@@ -850,15 +873,16 @@ if __name__ == "__main__":
     assert numeros == [26, 27], f"QA com JS: esperado [26, 27], obtido {numeros}."
     print(f"Perfil QA com JavaScript e qualidade: regras disparadas {numeros}.")
 
-    # Apenas ferramentas QA, sem foco em testes ou qualidade: nenhuma regra.
+    # Ferramentas QA sem foco em testes ou qualidade não ativam QA;
+    # atuação em Produtos e entrega de negócios ativam regra 29.
     motor.registrar_perfil({
         "matematica": "baixa", "atuacao": "produto",
         "ferramenta": "qa", "entrega": "negocios",
     })
     motor.run()
     numeros = sorted(regra.numero for regra in motor.regras_disparadas)
-    assert not numeros, f"Ferramenta QA isolada não deveria disparar regra: {numeros}."
-    print("Perfil apenas com ferramenta QA: nenhuma regra disparada.")
+    assert numeros == [29], f"Ferramenta QA sem atuação QA, com produto: esperado [29], obtido {numeros}."
+    print("Perfil com ferramenta QA e foco em Produtos: nenhuma regra QA; regra 29 disparada.")
 
     # Apenas entrega de qualidade sem atuação ou ferramentas QA: nenhuma regra.
     motor.registrar_perfil({
@@ -871,5 +895,95 @@ if __name__ == "__main__":
     print("Perfil apenas com entrega de qualidade: nenhuma regra disparada.")
 
     print("Regras de Engenharia de Qualidade e Testes (QA) 25, 26 e 27 validadas nos exemplos!")
-    print("Outras 3 regras, pontuação e recomendações: etapas futuras.")
+    # Gestão de Produtos — perfil completo deve disparar as três regras.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [28, 29, 30], f"Produtos completo: esperado [28, 29, 30], obtido {numeros}."
+    print(f"Perfil Gestão de Produtos completo: regras disparadas {numeros}.")
+
+    # Planejamento + Jira/Trello/Figma sem entrega estratégica: apenas 28.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [28], f"Planejamento e ferramenta de gestão: esperado [28], obtido {numeros}."
+    print(f"Perfil planejamento com Jira/Trello/Figma: regras disparadas {numeros}.")
+
+    # Planejamento + estratégia de negócio sem ferramenta: apenas 29.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "nenhuma", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [29], f"Planejamento e negócios: esperado [29], obtido {numeros}."
+    print(f"Perfil iniciante em Gestão de Produtos: regras disparadas {numeros}.")
+
+    # Ferramenta de gestão + entrega negócio sem atuar em Produtos: apenas 30.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "qa",
+        "ferramenta": "gestao", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [30], f"Gestão e negócio sem atuação de Produto: esperado [30], obtido {numeros}."
+    print(f"Perfil Jira/Trello/Figma com entrega de negócios: regras disparadas {numeros}.")
+
+    # Plano de negócio com linguagem JavaScript, sem ferramentas de gestão: 29.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "javascript", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [29], f"Produto com JavaScript: esperado [29], obtido {numeros}."
+    print(f"Perfil Gestão de Produtos com JavaScript: regras disparadas {numeros}.")
+
+    # Atuação em produto com Figma, mas entrega visual: dispara 6 (Front-end) e 28.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "experiencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [6, 28], f"Produto + design: esperado [6, 28], obtido {numeros}."
+    print(f"Perfil Produtos com entrega visual: regras disparadas {numeros}.")
+
+    # Ferramentas de gestão isoladas não bastam para acionar Gestão de Produtos.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "qa",
+        "ferramenta": "gestao", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [], f"Ferramenta de gestão isolada: nenhuma regra esperada; obtido {numeros}."
+    print("Perfil apenas com Jira/Trello/Figma: nenhuma regra disparada.")
+
+    # Somente entrega de negócios não é suficiente para ativar regras de Produto.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "qa",
+        "ferramenta": "nenhuma", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [], f"Somente entrega negócio: nenhuma regra esperada; obtido {numeros}."
+    print("Perfil apenas com entrega de negócios: nenhuma regra disparada.")
+
+    # Valida registro rastreável de regras e motivos cadastrados na Fase 1.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "negocios",
+    })
+    motor.run()
+    ids = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert ids == [28, 29, 30], f"Registro das regras de Gestão de Produtos incorreto: {ids}."
+    assert all(regra.motivo for regra in motor.regras_disparadas), "Faltam justificativas."
+    print("Regras de Gestão de Produtos 28, 29 e 30 validadas nos exemplos!")
+    print("Todas as 30 regras cadastradas. Pontuação, desempate e recomendações: próximas etapas.")
 
