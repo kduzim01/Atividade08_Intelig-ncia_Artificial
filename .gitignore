@@ -1,0 +1,12 @@
+# Ambiente virtual do Python
+.venv/
+
+# Cache e arquivos compilados
+__pycache__/
+*.py[cod]
+
+# Arquivos de ambiente
+.env
+
+# Cache de testes
+.pytest_cache/
