@@ -1,11 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.18.
+Atividade Aula 08 — Fase 2, etapa 2.24.
 
-Esta entrega mantém o registro e a validação do perfil da etapa anterior
-e acrescenta somente as três regras de Desenvolvimento Back-end (1, 2 e 3).
+Esta entrega preserva as três regras de Desenvolvimento Back-end (1, 2 e 3)
+e acrescenta somente as três regras de Front-end & UI/UX (4, 5 e 6).
 Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 27 regras ficam para etapas posteriores.
+desempate e as outras 24 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 3 (Back-end)."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 6."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -68,8 +68,12 @@ class MotorInferencia(KnowledgeEngine):
     def _registrar_disparo(self, numero: int) -> None:
         """Guarda a regra aprovada na Fase 1, incluindo seu motivo original."""
         regra = next((item for item in REGRAS if item.numero == numero), None)
-        if regra is None or regra.trilha != "backend":
-            raise ValueError(f"Regra de Back-end não encontrada: {numero}.")
+        trilhas_implementadas = {
+            1: "backend", 2: "backend", 3: "backend",
+            4: "frontend_uiux", 5: "frontend_uiux", 6: "frontend_uiux",
+        }
+        if regra is None or regra.trilha != trilhas_implementadas.get(numero):
+            raise ValueError(f"Regra de inferência não encontrada: {numero}.")
         if regra.numero not in {item.numero for item in self.regras_disparadas}:
             self.regras_disparadas.append(regra)
 
@@ -92,6 +96,22 @@ class MotorInferencia(KnowledgeEngine):
     )
     def regra_03_backend(self) -> None:
         self._registrar_disparo(3)
+
+
+    # Regra 4: atuação em interfaces E afinidade com JavaScript/TypeScript.
+    @Rule(PerfilUsuario(atuacao="interfaces", ferramenta="javascript"))
+    def regra_04_frontend_uiux(self) -> None:
+        self._registrar_disparo(4)
+
+    # Regra 5: atuação em interfaces E entrega de experiências acessíveis.
+    @Rule(PerfilUsuario(atuacao="interfaces", entrega="experiencia"))
+    def regra_05_frontend_uiux(self) -> None:
+        self._registrar_disparo(5)
+
+    # Regra 6: grupo Jira/Trello/Figma E entrega de experiências visuais.
+    @Rule(PerfilUsuario(ferramenta="gestao", entrega="experiencia"))
+    def regra_06_frontend_uiux(self) -> None:
+        self._registrar_disparo(6)
 
 
 if __name__ == "__main__":
@@ -143,4 +163,45 @@ if __name__ == "__main__":
     assert not motor.regras_disparadas, "Matemática baixa não deve disparar regra 3."
     print("Perfil com matemática baixa e SQL: nenhuma regra Back-end disparada.")
     print("Regras de Back-end 1, 2 e 3 validadas nos exemplos!")
-    print("Outras 27 regras, pontuação e recomendações: etapas futuras.")
+
+    # JavaScript/TypeScript + interfaces + experiência: regras 4 e 5.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "interfaces",
+        "ferramenta": "javascript", "entrega": "experiencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [4, 5], f"Front-end com JavaScript: esperado [4, 5], obtido {numeros}."
+    print(f"Perfil Front-end com JavaScript: regras disparadas {numeros}.")
+
+    # Ferramentas de gestão/design + entrega visual: regra 6, mesmo sem atuação em interfaces.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "gestao", "entrega": "experiencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [6], f"Ferramenta de design: esperada [6], obtida {numeros}."
+    print(f"Perfil com Jira/Trello/Figma e experiência: regras disparadas {numeros}.")
+
+    # Atuação em interfaces + ferramentas de gestão/design + experiência: regras 5 e 6.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "interfaces",
+        "ferramenta": "gestao", "entrega": "experiencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [5, 6], f"Interfaces e design: esperado [5, 6], obtido {numeros}."
+    print(f"Perfil de interfaces com Figma: regras disparadas {numeros}.")
+
+    # JavaScript, isoladamente, não pode ativar regra Front-end.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "javascript", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"JavaScript isolado não deve disparar regras: {numeros}."
+    print("Perfil com JavaScript, sem foco em interfaces: nenhuma regra disparada.")
+    print("Regras de Front-end & UI/UX 4, 5 e 6 validadas nos exemplos!")
+    print("Outras 24 regras, pontuação e recomendações: etapas futuras.")
