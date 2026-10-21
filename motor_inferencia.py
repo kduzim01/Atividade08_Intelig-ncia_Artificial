@@ -1,11 +1,10 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.54.
+Atividade Aula 08 — Fase 2, etapa 2.60.
 
-Preserva as regras 1 a 18 das seis trilhas anteriores e acrescenta as
-regras 19 a 21 de Computação em Nuvem (Cloud Architecture).
-Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 9 regras ficam para etapas posteriores.
+Preserva integralmente as regras 1 a 21 e acrescenta as regras 22 a 24 de
+Desenvolvimento Mobile. Os disparos são registrados para futuras justificativas.
+Pontuação, desempate e as demais 6 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 21."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 24."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -76,6 +75,7 @@ class MotorInferencia(KnowledgeEngine):
             13: "ciberseguranca", 14: "ciberseguranca", 15: "ciberseguranca",
             16: "devops_sre", 17: "devops_sre", 18: "devops_sre",
             19: "cloud_architecture", 20: "cloud_architecture", 21: "cloud_architecture",
+            22: "desenvolvimento_mobile", 23: "desenvolvimento_mobile", 24: "desenvolvimento_mobile",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -221,6 +221,27 @@ class MotorInferencia(KnowledgeEngine):
     )
     def regra_21_cloud_architecture(self) -> None:
         self._registrar_disparo(21)
+
+
+    # Regra 22: atuação em desenvolvimento de apps E ferramentas Mobile.
+    @Rule(PerfilUsuario(atuacao="mobile", ferramenta="mobile"))
+    def regra_22_desenvolvimento_mobile(self) -> None:
+        self._registrar_disparo(22)
+
+    # Regra 23: atuação em Mobile E entrega de apps para o cotidiano.
+    @Rule(PerfilUsuario(atuacao="mobile", entrega="mobile"))
+    def regra_23_desenvolvimento_mobile(self) -> None:
+        self._registrar_disparo(23)
+
+    # Regra 24: JavaScript/TypeScript OU tecnologias Mobile E entrega de apps.
+    @Rule(
+        OR(
+            PerfilUsuario(ferramenta="javascript", entrega="mobile"),
+            PerfilUsuario(ferramenta="mobile", entrega="mobile"),
+        )
+    )
+    def regra_24_desenvolvimento_mobile(self) -> None:
+        self._registrar_disparo(24)
 
 
 if __name__ == "__main__":
@@ -651,5 +672,86 @@ if __name__ == "__main__":
     print("Perfil apenas com AWS/Azure/GCP: nenhuma regra disparada.")
 
     print("Regras de Cloud Architecture 19, 20 e 21 validadas nos exemplos!")
-    print("Outras 9 regras, pontuação e recomendações: etapas futuras.")
+    # Perfil completo Mobile: atuação, tecnologia específica e entrega de apps.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "mobile",
+        "ferramenta": "mobile", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [22, 23, 24], f"Mobile completo: esperado [22, 23, 24], obtido {numeros}."
+    print(f"Perfil Mobile completo: regras disparadas {numeros}.")
+
+    # Atuação em Mobile + ferramentas Mobile, sem entrega de apps: apenas 22.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "mobile",
+        "ferramenta": "mobile", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [22], f"Mobile/ferramentas: esperado [22], obtido {numeros}."
+    print(f"Perfil Mobile com Flutter/React Native, sem entrega mobile: regras disparadas {numeros}.")
+
+    # Atuação Mobile + entrega Mobile, sem ferramenta específica: apenas 23.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "mobile",
+        "ferramenta": "sql", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [23], f"Mobile/entrega: esperado [23], obtido {numeros}."
+    print(f"Perfil Mobile com foco em aplicativos do cotidiano: regras disparadas {numeros}.")
+
+    # JavaScript + entrega Mobile, mesmo sem escolher a atuação Mobile: apenas 24.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "javascript", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [24], f"JavaScript/Mobile: esperado [24], obtido {numeros}."
+    print(f"Perfil JavaScript e entrega de aplicativos: regras disparadas {numeros}.")
+
+    # Ferramenta Mobile + entrega Mobile, sem atuação Mobile: apenas 24.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "mobile", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [24], f"Ferramenta/entrega Mobile: esperado [24], obtido {numeros}."
+    print(f"Perfil com tecnologia Mobile e entrega de aplicativos: regras disparadas {numeros}.")
+
+    # Atuação Mobile + JavaScript + entrega Mobile: regras 23 e 24.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "mobile",
+        "ferramenta": "javascript", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [23, 24], f"Mobile/JavaScript: esperado [23, 24], obtido {numeros}."
+    print(f"Perfil Mobile com JavaScript e entrega de apps: regras disparadas {numeros}.")
+
+    # Uma ferramenta Mobile isolada NÃO basta para recomendar a trilha.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "mobile", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Ferramenta Mobile isolada não deve disparar regra: {numeros}."
+    print("Perfil apenas com tecnologias Mobile: nenhuma regra disparada.")
+
+    # Entrega Mobile isolada também não satisfaz as regras cruzadas.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "sql", "entrega": "mobile",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Entrega Mobile isolada não deve disparar regra: {numeros}."
+    print("Perfil apenas com entrega de aplicativos: nenhuma regra disparada.")
+
+    print("Regras de Desenvolvimento Mobile 22, 23 e 24 validadas nos exemplos!")
+    print("Outras 6 regras, pontuação e recomendações: etapas futuras.")
 
