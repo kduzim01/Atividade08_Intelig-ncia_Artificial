@@ -1,11 +1,11 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.24.
+Atividade Aula 08 — Fase 2, etapa 2.30.
 
-Esta entrega preserva as três regras de Desenvolvimento Back-end (1, 2 e 3)
-e acrescenta somente as três regras de Front-end & UI/UX (4, 5 e 6).
+Esta entrega preserva as regras de Desenvolvimento Back-end (1 a 3) e
+Front-end & UI/UX (4 a 6), acrescentando apenas Ciência de Dados (7 a 9).
 Os disparos são registrados para futuras justificativas. Pontuação,
-desempate e as outras 24 regras ficam para etapas posteriores.
+desempate e as outras 21 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 6."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 9."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -71,6 +71,7 @@ class MotorInferencia(KnowledgeEngine):
         trilhas_implementadas = {
             1: "backend", 2: "backend", 3: "backend",
             4: "frontend_uiux", 5: "frontend_uiux", 6: "frontend_uiux",
+            7: "ciencia_dados_ml", 8: "ciencia_dados_ml", 9: "ciencia_dados_ml",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -112,6 +113,26 @@ class MotorInferencia(KnowledgeEngine):
     @Rule(PerfilUsuario(ferramenta="gestao", entrega="experiencia"))
     def regra_06_frontend_uiux(self) -> None:
         self._registrar_disparo(6)
+
+    # Regra 7: matemática Alta E atuação em análise/modelos de IA.
+    @Rule(PerfilUsuario(matematica="alta", atuacao="analise"))
+    def regra_07_ciencia_dados_ml(self) -> None:
+        self._registrar_disparo(7)
+
+    # Regra 8: atuação em análise E entrega de previsões inteligentes.
+    @Rule(PerfilUsuario(atuacao="analise", entrega="inteligencia"))
+    def regra_08_ciencia_dados_ml(self) -> None:
+        self._registrar_disparo(8)
+
+    # Regra 9: Python E matemática Média OU Alta E entrega inteligente.
+    @Rule(
+        OR(
+            PerfilUsuario(matematica="media", ferramenta="python", entrega="inteligencia"),
+            PerfilUsuario(matematica="alta", ferramenta="python", entrega="inteligencia"),
+        )
+    )
+    def regra_09_ciencia_dados_ml(self) -> None:
+        self._registrar_disparo(9)
 
 
 if __name__ == "__main__":
@@ -204,4 +225,55 @@ if __name__ == "__main__":
     assert not numeros, f"JavaScript isolado não deve disparar regras: {numeros}."
     print("Perfil com JavaScript, sem foco em interfaces: nenhuma regra disparada.")
     print("Regras de Front-end & UI/UX 4, 5 e 6 validadas nos exemplos!")
-    print("Outras 24 regras, pontuação e recomendações: etapas futuras.")
+
+    # Alta afinidade matemática + análise + Python + previsões: regras 7, 8 e 9.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "analise",
+        "ferramenta": "python", "entrega": "inteligencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [7, 8, 9], f"Cientista de Dados: esperado [7, 8, 9], obtido {numeros}."
+    print(f"Perfil Ciência de Dados completo: regras disparadas {numeros}.")
+
+    # Análise com matemática média e SQL: dispara a regra 8, não 7 ou 9.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "analise",
+        "ferramenta": "sql", "entrega": "inteligencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [8], f"Análise/SQL: esperada [8], obtido {numeros}."
+    print(f"Perfil análise com SQL: regras disparadas {numeros}.")
+
+    # Regra 9 é complementar e independe da atuação diária.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "inteligencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [9], f"Python e previsões: esperada [9], obtido {numeros}."
+    print(f"Perfil Python e previsões: regras disparadas {numeros}.")
+
+    # Matemática alta + análise, sem interesse em previsões: apenas regra 7.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "analise",
+        "ferramenta": "sql", "entrega": "dados",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [7], f"Matemática e análise: esperada [7], obtido {numeros}."
+    print(f"Perfil matemática alta e análise: regras disparadas {numeros}.")
+
+    # Matemática baixa não satisfaz a regra 9, mesmo com Python e previsões.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "inteligencia",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Matemática baixa não deveria disparar regras: {numeros}."
+    print("Perfil Python, matemática baixa e sem análise: nenhuma regra disparada.")
+    print("Regras de Ciência de Dados e ML 7, 8 e 9 validadas nos exemplos!")
+    print("Outras 21 regras, pontuação e recomendações: etapas futuras.")
