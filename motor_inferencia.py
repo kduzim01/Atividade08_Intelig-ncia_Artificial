@@ -1,12 +1,14 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.84.
+Atividade Aula 08 — Fase 2, etapa 2.90.
 
 Preserva as trinta regras Experta e seus cenários de teste. Calcula a
 pontuação de cada trilha a partir das quatro respostas e dos pesos da
 Fase 1, sem duplicar pontos por quantidade de regras disparadas.
 Aplica os quatro critérios de desempate aprovados, apenas às trilhas
-empatadas na maior pontuação. Recomendação final: etapa posterior.
+empatadas na maior pontuação. Produz uma recomendação justificada,
+separando as regras realmente disparadas das evidências individuais
+de pontuação e indicando os empates resolvidos.
 """
 
 from __future__ import annotations
@@ -72,6 +74,71 @@ class ResultadoDesempate:
     codigo_selecionado: str
     pontuacao_empatada: int
     criterio_decisivo: str
+
+
+@dataclass(frozen=True)
+class ResultadoRecomendacao:
+    """Decisão fundamentada e auditável, pronta para a futura interface web.
+
+    ``regras_da_trilha`` lista apenas regras Experta REALMENTE disparadas
+    para a carreira selecionada. ``regras_de_outras_trilhas`` informa
+    disparos das demais carreiras para total transparência.
+    As justificativas de pontuação são distintas das regras cruzadas.
+    """
+
+    codigo_trilha: str
+    nome_trilha: str
+    pontuacao_total: int
+    detalhamento: PontuacaoTrilha
+    pontuacoes: tuple[PontuacaoTrilha, ...]
+    regras_da_trilha: tuple[Regra, ...]
+    regras_de_outras_trilhas: tuple[Regra, ...]
+    justificativas_pontuacao: tuple[str, ...]
+    desempate: ResultadoDesempate | None
+
+    def formatar(self) -> str:
+        """Formata a recomendação em texto, sem dependência do Streamlit."""
+        linhas = [
+            f"Carreira recomendada: {self.nome_trilha}",
+            f"Pontuação final: {self.pontuacao_total} pontos",
+            "Critérios de pontuação utilizados:",
+        ]
+        linhas.extend(f"  - {motivo}" for motivo in self.justificativas_pontuacao)
+        linhas.append("Regras cruzadas disparadas para a carreira recomendada:")
+        if self.regras_da_trilha:
+            linhas.extend(
+                f"  - Regra {regra.numero}: {regra.motivo}"
+                for regra in self.regras_da_trilha
+            )
+        else:
+            linhas.append(
+                "  - Nenhuma regra cruzada dessa carreira foi disparada. "
+                "A escolha decorreu dos critérios individuais de pontuação "
+                "e, quando necessário, do desempate."
+            )
+        if self.desempate is not None:
+            candidatos = ", ".join(
+                next(trilha.nome for trilha in TRILHAS if trilha.codigo == codigo)
+                for codigo in self.desempate.candidatos_originais
+            )
+            nomes = {
+                "atuacao": "preferência de atuação diária",
+                "entrega": "tipo de entrega de valor",
+                "ferramenta_principal": "afinidade com ferramenta principal",
+                "matematica": "afinidade matemática",
+            }
+            linhas.append(
+                f"Desempate: {candidatos} empataram com "
+                f"{self.desempate.pontuacao_empatada} pontos. "
+                f"O critério decisivo foi {nomes[self.desempate.criterio_decisivo]}."
+            )
+        if self.regras_de_outras_trilhas:
+            linhas.append("Outras regras cruzadas também disparadas (não decisivas):")
+            linhas.extend(
+                f"  - Regra {regra.numero}: {regra.motivo}"
+                for regra in self.regras_de_outras_trilhas
+            )
+        return "\n".join(linhas)
 
 
 class PerfilUsuario(Fact):
@@ -226,6 +293,92 @@ class MotorInferencia(KnowledgeEngine):
             "Empate persistente após todos os critérios aprovados: "
             + ", ".join(item.codigo_trilha for item in empatadas)
         )
+
+    def recomendar_carreira(self) -> ResultadoRecomendacao:
+        """Gera uma recomendação e explicita as evidências efetivamente usadas.
+
+        Executa o motor Experta para registrar disparos antes de coletar
+        justificativas. A pontuação segue a matriz de pesos da Fase 1,
+        não a quantidade de regras. A seleção respeita o desempate aprovado.
+        """
+        if self._respostas_atuais is None:
+            raise RuntimeError("Registre um perfil antes de recomendar uma carreira.")
+
+        # Caso o chamador ainda não tenha chamado run(), faz isso agora.
+        # O Experta mantém as ativações consumidas até registrar outro perfil.
+        self.run()
+        pontuacoes = self.calcular_pontuacoes()
+        maior = max(p.total for p in pontuacoes)
+        primeiras = [p for p in pontuacoes if p.total == maior]
+        desempate = self._desempatar_pontuacoes(pontuacoes)
+        codigo_vencedor = (
+            primeiras[0].codigo_trilha
+            if desempate is None else desempate.codigo_selecionado
+        )
+        selecionada = next(
+            p for p in pontuacoes if p.codigo_trilha == codigo_vencedor
+        )
+        regras_disparadas = sorted(self.regras_disparadas, key=lambda r: r.numero)
+        regras_da_trilha = tuple(
+            r for r in regras_disparadas if r.trilha == codigo_vencedor
+        )
+        outras_regras = tuple(
+            r for r in regras_disparadas if r.trilha != codigo_vencedor
+        )
+        justificativas = self._justificar_pontuacao(selecionada)
+
+        return ResultadoRecomendacao(
+            codigo_trilha=codigo_vencedor,
+            nome_trilha=selecionada.nome_trilha,
+            pontuacao_total=selecionada.total,
+            detalhamento=selecionada,
+            pontuacoes=pontuacoes,
+            regras_da_trilha=regras_da_trilha,
+            regras_de_outras_trilhas=outras_regras,
+            justificativas_pontuacao=justificativas,
+            desempate=desempate,
+        )
+
+    def _justificar_pontuacao(
+        self, pontos: PontuacaoTrilha
+    ) -> tuple[str, ...]:
+        """Fundamenta cada parcela da pontuação usando as opções aprovadas."""
+        assert self._respostas_atuais is not None
+        respostas = self._respostas_atuais
+        alternativas = {
+            pergunta.dimensao: {opcao.codigo: opcao for opcao in pergunta.opcoes}
+            for pergunta in PERGUNTAS
+        }
+        mat = alternativas["matematica"][respostas["matematica"]]
+        atuacao = alternativas["atuacao"][respostas["atuacao"]]
+        ferramenta = alternativas["ferramenta"][respostas["ferramenta"]]
+        entrega = alternativas["entrega"][respostas["entrega"]]
+
+        justificativas = [
+            f"Afinidade matemática ({mat.titulo}): +{pontos.matematica} "
+            "(não é critério eliminatório).",
+        ]
+        if pontos.atuacao:
+            justificativas.append(
+                f"Atuação profissional: {atuacao.descricao} "
+                f"(+{pontos.atuacao})."
+            )
+        if pontos.ferramenta_principal:
+            justificativas.append(
+                f"Ferramenta principal: {ferramenta.titulo} "
+                f"(+{pontos.ferramenta_principal})."
+            )
+        elif pontos.ferramenta_complementar:
+            justificativas.append(
+                f"Ferramenta complementar: {ferramenta.titulo} "
+                f"(+{pontos.ferramenta_complementar})."
+            )
+        if pontos.entrega:
+            justificativas.append(
+                f"Entrega de valor: {entrega.descricao} "
+                f"(+{pontos.entrega})."
+            )
+        return tuple(justificativas)
 
     # Regra 1: atuação em algoritmos/APIs E afinidade com Java/C#.
     @Rule(PerfilUsuario(atuacao="logica", ferramenta="java"))
@@ -1199,7 +1352,7 @@ if __name__ == "__main__":
                    for p in resultados), "Ferramenta não pode pontuar em duas classes."
         print(f"Pontuação validada — {nome}: {pontos.total} pontos.")
 
-    # Empate que será resolvido somente na etapa futura de desempate.
+    # A seção de pontuação preserva o teste do empate, sem decidir seu vencedor.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "devops",
         "ferramenta": "redes", "entrega": "infraestrutura",
@@ -1208,7 +1361,7 @@ if __name__ == "__main__":
     pontuacoes = {p.codigo_trilha: p for p in motor.calcular_pontuacoes()}
     assert pontuacoes["devops_sre"].total == 7
     assert pontuacoes["cloud_architecture"].total == 7
-    print("Empate DevOps/Cloud validado: 7 pontos para cada; sem desempate nesta etapa.")
+    print("Pontuação: empate DevOps/Cloud validado, 7 pontos para cada.")
 
     # Ao registrar um novo perfil, a pontuação anterior não pode persistir.
     motor.registrar_perfil({
@@ -1220,7 +1373,7 @@ if __name__ == "__main__":
     assert pontuacoes["gestao_produtos"].total == 13
     assert pontuacoes["devops_sre"].total == 0
     print("Registro de novo perfil e ausência de pontuação duplicada: validados!")
-    print("Sistema de pontuação validado nos exemplos! Recomendação: etapa futura.")
+    print("Sistema de pontuação validado nos exemplos!")
 
     # Desempate real: DevOps e Cloud têm sete pontos. A preferência de
     # atuação da pergunta 2 deve priorizar DevOps sem alterar os pontos.
@@ -1299,5 +1452,86 @@ if __name__ == "__main__":
         raise AssertionError("Empate persistente deve ser sinalizado.")
     print("Empate persistente: erro explícito validado (sem critério extra).")
     print("Quatro prioridades aprovadas de desempate validadas nos exemplos!")
-    print("Recomendação final com justificativas: próxima etapa.")
+    # Etapa 2.90 — Recomendação final rastreável, preservando todos os testes.
+    # Execução direta sem chamar motor.run() também deve registrar as regras.
+    sem_perfil_recomendacao = MotorInferencia()
+    try:
+        sem_perfil_recomendacao.recomendar_carreira()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Recomendação sem perfil deveria falhar.")
+
+    casos_recomendacao = (
+        (
+            "Back-end completo",
+            {"matematica": "media", "atuacao": "logica",
+             "ferramenta": "java", "entrega": "funcionalidade"},
+            "backend", 14, (1, 2),
+        ),
+        (
+            "Front-end completo",
+            {"matematica": "baixa", "atuacao": "interfaces",
+             "ferramenta": "javascript", "entrega": "experiencia"},
+            "frontend_uiux", 13, (4, 5),
+        ),
+        (
+            "Ciência de Dados completo",
+            {"matematica": "alta", "atuacao": "analise",
+             "ferramenta": "python", "entrega": "inteligencia"},
+            "ciencia_dados_ml", 15, (7, 8, 9),
+        ),
+        (
+            "QA iniciante",
+            {"matematica": "baixa", "atuacao": "qa",
+             "ferramenta": "nenhuma", "entrega": "qualidade"},
+            "engenharia_qa", 10, (26,),
+        ),
+        (
+            "Gestão de Produtos completa",
+            {"matematica": "baixa", "atuacao": "produto",
+             "ferramenta": "gestao", "entrega": "negocios"},
+            "gestao_produtos", 13, (28, 29, 30),
+        ),
+    )
+    for nome, respostas, codigo_esperado, total_esperado, regras_esperadas in casos_recomendacao:
+        motor.registrar_perfil(respostas)
+        recomendacao = motor.recomendar_carreira()
+        assert recomendacao.codigo_trilha == codigo_esperado, nome
+        assert recomendacao.pontuacao_total == total_esperado, nome
+        assert recomendacao.desempate is None, nome
+        assert tuple(r.numero for r in recomendacao.regras_da_trilha) == regras_esperadas, nome
+        assert recomendacao.pontuacao_total == sum((
+            recomendacao.detalhamento.matematica,
+            recomendacao.detalhamento.atuacao,
+            recomendacao.detalhamento.ferramenta_principal,
+            recomendacao.detalhamento.ferramenta_complementar,
+            recomendacao.detalhamento.entrega,
+        )), nome
+        assert recomendacao.justificativas_pontuacao, nome
+        assert recomendacao.nome_trilha in recomendacao.formatar(), nome
+        assert all(f"Regra {r.numero}: {r.motivo}" in recomendacao.formatar()
+                   for r in recomendacao.regras_da_trilha), nome
+        # Repetir a consulta não cria pontos ou regras duplicados.
+        outra = motor.recomendar_carreira()
+        assert recomendacao == outra, f"Consulta duplicada: {nome}"
+        print(f"Recomendação validada — {nome}: {total_esperado} pontos.")
+
+    # Empate entre DevOps e Cloud: prioriza atuação sem inventar disparos.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "redes", "entrega": "infraestrutura",
+    })
+    recomendacao_empate = motor.recomendar_carreira()
+    assert recomendacao_empate.codigo_trilha == "devops_sre"
+    assert recomendacao_empate.desempate is not None
+    assert recomendacao_empate.desempate.criterio_decisivo == "atuacao"
+    assert recomendacao_empate.pontuacao_total == 7
+    assert not recomendacao_empate.regras_da_trilha
+    assert 21 in {r.numero for r in recomendacao_empate.regras_de_outras_trilhas}
+    assert "Nenhuma regra cruzada dessa carreira foi disparada" in recomendacao_empate.formatar()
+    assert "Desempate:" in recomendacao_empate.formatar()
+    print("Recomendação com empate DevOps/Cloud validada, sem inventar regras disparadas.")
+    print("Todas as recomendações, justificativas e rastreabilidade validadas nos exemplos!")
+    print("Fase 2 — recomendação final pronta para revisão e publicação no GitHub.")
 
