@@ -1,12 +1,12 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.42.
+Atividade Aula 08 — Fase 2, etapa 2.48.
 
 Esta entrega preserva as regras de Back-end (1 a 3), Front-end & UI/UX
-(4 a 6), Ciência de Dados e ML (7 a 9) e Engenharia de Dados (10 a 12),
-acrescentando Cibersegurança (13 a 15). Os disparos são registrados para
-futuras justificativas. Pontuação, desempate e as outras 15 regras ficam
-para etapas posteriores.
+(4 a 6), Ciência de Dados e ML (7 a 9), Engenharia de Dados (10 a 12) e
+Cibersegurança (13 a 15), acrescentando DevOps & SRE (16 a 18).
+Os disparos são registrados para futuras justificativas. Pontuação,
+desempate e as outras 12 regras ficam para etapas posteriores.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class PerfilUsuario(Fact):
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Motor Experta: nesta etapa, executa apenas as regras 1 a 15."""
+    """Motor Experta: nesta etapa, executa apenas as regras 1 a 18."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -75,6 +75,7 @@ class MotorInferencia(KnowledgeEngine):
             7: "ciencia_dados_ml", 8: "ciencia_dados_ml", 9: "ciencia_dados_ml",
             10: "engenharia_dados", 11: "engenharia_dados", 12: "engenharia_dados",
             13: "ciberseguranca", 14: "ciberseguranca", 15: "ciberseguranca",
+            16: "devops_sre", 17: "devops_sre", 18: "devops_sre",
         }
         if regra is None or regra.trilha != trilhas_implementadas.get(numero):
             raise ValueError(f"Regra de inferência não encontrada: {numero}.")
@@ -181,6 +182,21 @@ class MotorInferencia(KnowledgeEngine):
     )
     def regra_15_ciberseguranca(self) -> None:
         self._registrar_disparo(15)
+
+    # Regra 16: atuação em automação/implantação E Docker/Kubernetes/CI-CD.
+    @Rule(PerfilUsuario(atuacao="devops", ferramenta="devops"))
+    def regra_16_devops_sre(self) -> None:
+        self._registrar_disparo(16)
+
+    # Regra 17: atuação em automação E entrega de processos automatizados/confiáveis.
+    @Rule(PerfilUsuario(atuacao="devops", entrega="automacao"))
+    def regra_17_devops_sre(self) -> None:
+        self._registrar_disparo(17)
+
+    # Regra 18: Docker/Kubernetes/CI-CD E entrega de automação/confiabilidade.
+    @Rule(PerfilUsuario(ferramenta="devops", entrega="automacao"))
+    def regra_18_devops_sre(self) -> None:
+        self._registrar_disparo(18)
 
 
 if __name__ == "__main__":
@@ -457,4 +473,76 @@ if __name__ == "__main__":
     print("Perfil apenas com Linux/Redes: nenhuma regra disparada.")
 
     print("Regras de Cibersegurança 13, 14 e 15 validadas nos exemplos!")
-    print("Outras 15 regras, pontuação e recomendações: etapas futuras.")
+
+    # DevOps completo: atuação em automação + Docker/CI-CD + entrega de automação.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "devops", "entrega": "automacao",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [16, 17, 18], f"DevOps completo: esperado [16, 17, 18], obtido {numeros}."
+    print(f"Perfil completo DevOps & SRE: regras disparadas {numeros}.")
+
+    # Automação + Docker/CI-CD sem entrega de automação: somente regra 16.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "devops",
+        "ferramenta": "devops", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [16], f"DevOps/Docker sem entrega: esperado [16], obtido {numeros}."
+    print(f"Perfil DevOps com Docker/CI-CD: regras disparadas {numeros}.")
+
+    # Atuação e entrega orientadas à automação sem Docker: somente regra 17.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "gestao", "entrega": "automacao",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [17], f"DevOps sem Docker: esperado [17], obtido {numeros}."
+    print(f"Perfil automação e confiabilidade: regras disparadas {numeros}.")
+
+    # Ferramentas Docker/CI-CD e entrega de automação, sem atuação em DevOps: regra 18.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "devops", "entrega": "automacao",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [18], f"Docker/automação: esperado [18], obtido {numeros}."
+    print(f"Perfil Docker/CI-CD e entrega de automação: regras disparadas {numeros}.")
+
+    # Linux/Redes não substitui Docker/CI-CD nas regras 16 e 18.
+    motor.registrar_perfil({
+        "matematica": "media", "atuacao": "devops",
+        "ferramenta": "redes", "entrega": "automacao",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert numeros == [17], f"DevOps/Redes: esperado [17], obtido {numeros}."
+    print(f"Perfil DevOps com Linux/Redes: regras disparadas {numeros}.")
+
+    # Apenas afinidade com Docker/CI-CD não deve disparar regra DevOps.
+    motor.registrar_perfil({
+        "matematica": "baixa", "atuacao": "produto",
+        "ferramenta": "devops", "entrega": "negocios",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Docker/CI-CD isolado não deve ativar regras: {numeros}."
+    print("Perfil apenas com Docker/CI-CD: nenhuma regra disparada.")
+
+    # Python e entrega de automação sem atuação DevOps também não bastam.
+    motor.registrar_perfil({
+        "matematica": "alta", "atuacao": "produto",
+        "ferramenta": "python", "entrega": "automacao",
+    })
+    motor.run()
+    numeros = sorted(regra.numero for regra in motor.regras_disparadas)
+    assert not numeros, f"Python isolado não deve ativar regras DevOps: {numeros}."
+    print("Perfil Python sem foco em DevOps: nenhuma regra disparada.")
+
+    print("Regras de DevOps & SRE 16, 17 e 18 validadas nos exemplos!")
+    print("Outras 12 regras, pontuação e recomendações: etapas futuras.")
