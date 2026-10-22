@@ -1,14 +1,9 @@
 """Motor de inferência do Consultor Inteligente de Carreiras em TI.
 
-Atividade Aula 08 — Fase 2, etapa 2.90.
-
-Preserva as trinta regras Experta e seus cenários de teste. Calcula a
-pontuação de cada trilha a partir das quatro respostas e dos pesos da
-Fase 1, sem duplicar pontos por quantidade de regras disparadas.
-Aplica os quatro critérios de desempate aprovados, apenas às trilhas
-empatadas na maior pontuação. Produz uma recomendação justificada,
-separando as regras realmente disparadas das evidências individuais
-de pontuação e indicando os empates resolvidos.
+Executa 30 regras SE–ENTÃO com Experta e pontua a compatibilidade de dez
+trilhas sem duplicar pontos. Em caso de empate na pontuação, dá preferência
+a carreiras apoiadas por mais regras realmente disparadas. Persistindo o
+empate, aplica os quatro critérios de desempate da base de conhecimento.
 """
 
 from __future__ import annotations
@@ -78,7 +73,7 @@ class ResultadoDesempate:
 
 @dataclass(frozen=True)
 class ResultadoRecomendacao:
-    """Decisão fundamentada e auditável, pronta para a futura interface web.
+    """Decisão fundamentada e auditável, pronta para a interface web.
 
     ``regras_da_trilha`` lista apenas regras Experta REALMENTE disparadas
     para a carreira selecionada. ``regras_de_outras_trilhas`` informa
@@ -122,6 +117,7 @@ class ResultadoRecomendacao:
                 for codigo in self.desempate.candidatos_originais
             )
             nomes = {
+                "regras_cruzadas": "quantidade de regras cruzadas disparadas",
                 "atuacao": "preferência de atuação diária",
                 "entrega": "tipo de entrega de valor",
                 "ferramenta_principal": "afinidade com ferramenta principal",
@@ -142,11 +138,11 @@ class ResultadoRecomendacao:
 
 
 class PerfilUsuario(Fact):
-    """Fato com as quatro respostas da entrevista, usando os códigos da Fase 1."""
+    """Fato com as quatro respostas da entrevista registradas na base."""
 
 
 class MotorInferencia(KnowledgeEngine):
-    """Executa as 30 regras e calcula a pontuação independente dos disparos."""
+    """Executa as regras e considera as evidências em empates de pontuação."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -186,7 +182,7 @@ class MotorInferencia(KnowledgeEngine):
         self._respostas_atuais = dict(respostas)
 
     def _registrar_disparo(self, numero: int) -> None:
-        """Guarda a regra aprovada na Fase 1, incluindo seu motivo original."""
+        """Guarda a regra cadastrada, incluindo seu motivo original."""
         regra = next((item for item in REGRAS if item.numero == numero), None)
         trilhas_implementadas = {
             1: "backend", 2: "backend", 3: "backend",
@@ -206,12 +202,12 @@ class MotorInferencia(KnowledgeEngine):
             self.regras_disparadas.append(regra)
 
     def calcular_pontuacoes(self) -> tuple[PontuacaoTrilha, ...]:
-        """Aplica a matriz de pesos da Fase 1 às quatro respostas do perfil.
+        """Aplica a matriz de pesos cadastrada às quatro respostas do perfil.
 
         O resultado contém as dez carreiras na ordem da base declarativa.
         Cada pergunta contribui no máximo uma vez para cada trilha;
-        regras disparadas servem para registrar evidências, não para
-        multiplicar pontos. Não decide a carreira vencedora nem desempata.
+        regras disparadas são evidências para desempate, não
+        multiplicam os pontos de compatibilidade. Não decide a carreira vencedora nem desempata.
         """
         if self._respostas_atuais is None:
             raise RuntimeError("Registre um perfil antes de calcular pontuações.")
@@ -253,16 +249,23 @@ class MotorInferencia(KnowledgeEngine):
         Retorna ``None`` se houver um único primeiro colocado, pois nesse
         caso não há empate a resolver. Não produz recomendação final.
         """
-        return self._desempatar_pontuacoes(self.calcular_pontuacoes())
+        # Garantir que as evidências utilizadas tenham sido produzidas pelo Experta.
+        self.run()
+        return self._desempatar_pontuacoes(
+            self.calcular_pontuacoes(), tuple(self.regras_disparadas)
+        )
 
     @staticmethod
     def _desempatar_pontuacoes(
         pontuacoes: tuple[PontuacaoTrilha, ...],
+        regras_disparadas: tuple[Regra, ...] = (),
     ) -> ResultadoDesempate | None:
-        """Aplica a ORDEM_DESEMPATE, sem alterar pontos ou regras disparadas.
+        """Desempata a maior pontuação com evidências e critérios declarados.
 
-        O método separado permite testar cada prioridade mesmo quando os
-        perfis reais normalmente desempatem já pela preferência de atuação.
+        As regras não acrescentam pontos: somente candidatos empatados na
+        pontuação máxima são comparados pela quantidade de regras cruzadas
+        efetivamente disparadas. Com empate de evidências (inclusive zero),
+        os quatro critérios originais permanecem na mesma ordem relativa.
         """
         if not pontuacoes:
             raise ValueError("A lista de pontuações não pode estar vazia.")
@@ -273,6 +276,28 @@ class MotorInferencia(KnowledgeEngine):
             return None
 
         candidatos_originais = tuple(item.codigo_trilha for item in empatadas)
+        # Apenas disparos reais do motor contam; nenhuma regra é presumida.
+        contagem_regras = {
+            item.codigo_trilha: sum(
+                regra.trilha == item.codigo_trilha for regra in regras_disparadas
+            )
+            for item in empatadas
+        }
+        maior_apoio = max(contagem_regras.values())
+        if maior_apoio > 0:
+            apoiadas = [
+                item for item in empatadas
+                if contagem_regras[item.codigo_trilha] == maior_apoio
+            ]
+            if len(apoiadas) == 1:
+                return ResultadoDesempate(
+                    candidatos_originais=candidatos_originais,
+                    codigo_selecionado=apoiadas[0].codigo_trilha,
+                    pontuacao_empatada=maior_total,
+                    criterio_decisivo="regras_cruzadas",
+                )
+            empatadas = apoiadas
+
         for criterio in ORDEM_DESEMPATE:
             maior_criterio = max(getattr(item, criterio) for item in empatadas)
             empatadas = [
@@ -287,19 +312,18 @@ class MotorInferencia(KnowledgeEngine):
                     criterio_decisivo=criterio,
                 )
 
-        # Não introduz uma quinta prioridade ou a ordem de cadastro como
-        # desempate implícito. Caso impossível nos perfis atuais da Fase 1.
         raise RuntimeError(
-            "Empate persistente após todos os critérios aprovados: "
+            "Empate persistente após evidências e critérios aprovados: "
             + ", ".join(item.codigo_trilha for item in empatadas)
         )
 
     def recomendar_carreira(self) -> ResultadoRecomendacao:
         """Gera uma recomendação e explicita as evidências efetivamente usadas.
 
-        Executa o motor Experta para registrar disparos antes de coletar
-        justificativas. A pontuação segue a matriz de pesos da Fase 1,
-        não a quantidade de regras. A seleção respeita o desempate aprovado.
+        Executa o Experta para registrar disparos verificáveis antes de
+        selecionar a carreira. A pontuação ponderada define os finalistas;
+        em empates, as regras cruzadas participam da decisão sem somar pontos.
+        Persistindo a igualdade, usa os quatro critérios originais.
         """
         if self._respostas_atuais is None:
             raise RuntimeError("Registre um perfil antes de recomendar uma carreira.")
@@ -310,7 +334,9 @@ class MotorInferencia(KnowledgeEngine):
         pontuacoes = self.calcular_pontuacoes()
         maior = max(p.total for p in pontuacoes)
         primeiras = [p for p in pontuacoes if p.total == maior]
-        desempate = self._desempatar_pontuacoes(pontuacoes)
+        desempate = self._desempatar_pontuacoes(
+            pontuacoes, tuple(self.regras_disparadas)
+        )
         codigo_vencedor = (
             primeiras[0].codigo_trilha
             if desempate is None else desempate.codigo_selecionado
@@ -1270,7 +1296,7 @@ if __name__ == "__main__":
     assert numeros == [], f"Somente entrega negócio: nenhuma regra esperada; obtido {numeros}."
     print("Perfil apenas com entrega de negócios: nenhuma regra disparada.")
 
-    # Valida registro rastreável de regras e motivos cadastrados na Fase 1.
+    # Valida registro rastreável de regras e motivos cadastrados na base.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "produto",
         "ferramenta": "gestao", "entrega": "negocios",
@@ -1283,7 +1309,7 @@ if __name__ == "__main__":
     print("Todas as 30 regras cadastradas e validadas nos exemplos!")
 
     # Pontuação: cada resposta contribui uma vez por carreira, independentemente
-    # da quantidade de regras disparadas. A validação usa os pesos da Fase 1.
+    # da quantidade de regras disparadas. A validação usa os pesos da base.
     sem_perfil = MotorInferencia()
     try:
         sem_perfil.calcular_pontuacoes()
@@ -1375,8 +1401,8 @@ if __name__ == "__main__":
     print("Registro de novo perfil e ausência de pontuação duplicada: validados!")
     print("Sistema de pontuação validado nos exemplos!")
 
-    # Desempate real: DevOps e Cloud têm sete pontos. A preferência de
-    # atuação da pergunta 2 deve priorizar DevOps sem alterar os pontos.
+    # Desempate real: DevOps e Cloud têm sete pontos. A regra 21
+    # de Cloud constitui evidência cruzada e decide sem alterar pontos.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "devops",
         "ferramenta": "redes", "entrega": "infraestrutura",
@@ -1386,13 +1412,13 @@ if __name__ == "__main__":
     antes_pontuacoes = motor.calcular_pontuacoes()
     resultado = motor.resolver_desempate()
     assert resultado is not None
-    assert resultado.codigo_selecionado == "devops_sre"
-    assert resultado.criterio_decisivo == "atuacao"
+    assert resultado.codigo_selecionado == "cloud_architecture"
+    assert resultado.criterio_decisivo == "regras_cruzadas"
     assert resultado.pontuacao_empatada == 7
     assert set(resultado.candidatos_originais) == {"devops_sre", "cloud_architecture"}
     assert motor.calcular_pontuacoes() == antes_pontuacoes
     assert tuple(motor.regras_disparadas) == antes_regras
-    print("Desempate real DevOps/Cloud: atuação priorizou DevOps (7 pontos cada).")
+    print("Desempate real DevOps/Cloud: regra 21 priorizou Cloud (7 pontos cada).")
 
     # Sem empate na maior pontuação, o método não altera a classificação.
     motor.registrar_perfil({
@@ -1452,7 +1478,7 @@ if __name__ == "__main__":
         raise AssertionError("Empate persistente deve ser sinalizado.")
     print("Empate persistente: erro explícito validado (sem critério extra).")
     print("Quatro prioridades aprovadas de desempate validadas nos exemplos!")
-    # Etapa 2.90 — Recomendação final rastreável, preservando todos os testes.
+    # Verificações de regressão das recomendações e da rastreabilidade.
     # Execução direta sem chamar motor.run() também deve registrar as regras.
     sem_perfil_recomendacao = MotorInferencia()
     try:
@@ -1517,21 +1543,21 @@ if __name__ == "__main__":
         assert recomendacao == outra, f"Consulta duplicada: {nome}"
         print(f"Recomendação validada — {nome}: {total_esperado} pontos.")
 
-    # Empate entre DevOps e Cloud: prioriza atuação sem inventar disparos.
+    # Empate entre DevOps e Cloud: prioriza evidência real da regra 21.
     motor.registrar_perfil({
         "matematica": "media", "atuacao": "devops",
         "ferramenta": "redes", "entrega": "infraestrutura",
     })
     recomendacao_empate = motor.recomendar_carreira()
-    assert recomendacao_empate.codigo_trilha == "devops_sre"
+    assert recomendacao_empate.codigo_trilha == "cloud_architecture"
     assert recomendacao_empate.desempate is not None
-    assert recomendacao_empate.desempate.criterio_decisivo == "atuacao"
+    assert recomendacao_empate.desempate.criterio_decisivo == "regras_cruzadas"
     assert recomendacao_empate.pontuacao_total == 7
-    assert not recomendacao_empate.regras_da_trilha
-    assert 21 in {r.numero for r in recomendacao_empate.regras_de_outras_trilhas}
-    assert "Nenhuma regra cruzada dessa carreira foi disparada" in recomendacao_empate.formatar()
+    assert 21 in {r.numero for r in recomendacao_empate.regras_da_trilha}
+    assert not recomendacao_empate.regras_de_outras_trilhas
+    assert "Regra 21:" in recomendacao_empate.formatar()
     assert "Desempate:" in recomendacao_empate.formatar()
-    print("Recomendação com empate DevOps/Cloud validada, sem inventar regras disparadas.")
+    print("Recomendação com empate DevOps/Cloud validada, priorizando regra 21.")
     print("Todas as recomendações, justificativas e rastreabilidade validadas nos exemplos!")
-    print("Fase 2 — recomendação final pronta para revisão e publicação no GitHub.")
+    print("Motor de inferência: validação de regressão concluída.")
 

@@ -1,8 +1,7 @@
-"""Consultor Inteligente de Carreiras em TI — Fase 3.
+"""Interface Streamlit do Consultor Inteligente de Carreiras em TI.
 
-Primeiro incremento: refinamento visual da interface Streamlit.
-Preserva as quatro perguntas da Fase 1 e toda a integração da Fase 2:
-Experta, pontuação, recomendação, justificativas, desempate e rastreabilidade.
+Exibe a entrevista, a classificação ponderada, a recomendação rastreável,
+as regras acionadas e a justificativa do desempate quando aplicável.
 """
 
 import streamlit as st
@@ -193,6 +192,7 @@ if enviado:
             if recomendacao.desempate is not None:
                 nomes_trilhas = {trilha.codigo: trilha.nome for trilha in TRILHAS}
                 nomes_criterios = {
+                    "regras_cruzadas": "quantidade de regras cruzadas disparadas",
                     "atuacao": "preferência de atuação diária",
                     "entrega": "tipo de entrega de valor",
                     "ferramenta_principal": "afinidade com a ferramenta principal",

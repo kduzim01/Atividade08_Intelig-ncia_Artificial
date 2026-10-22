@@ -1,12 +1,8 @@
-"""Base de conhecimento do Consultor Inteligente de Carreiras em TI.
+"""Base declarativa do Consultor Inteligente de Carreiras em TI.
 
-Fase 1: Engenharia de Conhecimento e Matriz de Decisão.
-
-Este módulo contém somente dados e regras declarativas:
-    - quatro perguntas e suas alternativas;
-    - dez trilhas de carreira e respectivas matrizes;
-    - trinta regras SE-ENTÃO propostas;
-    - pesos de pontuação e ordem de desempate.
+Contém as quatro perguntas, as dez trilhas, a matriz de pontuação, as trinta
+regras cruzadas, a ordem de desempate e verificações de integridade dos dados.
+Não realiza processamento de fatos nem renderiza a interface web.
 """
 
 from __future__ import annotations
@@ -64,8 +60,8 @@ class Condicao:
 class Regra:
     """Regra declarativa: TODAS as condições devem ser verdadeiras (E).
 
-    As condições deste objeto ainda não são executadas. A Fase 2 as
-    converterá em regras do motor Experta e registrará os disparos.
+    As condições são dados declarativos espelhados nas regras do motor
+    Experta, que registra os disparos efetivamente realizados.
     """
 
     numero: int
@@ -225,7 +221,7 @@ TRILHAS: tuple[Trilha, ...] = (
 #
 # Todas as dimensões informadas em cada regra formam uma conjunção (E).
 # Quando uma dimensão possui uma tupla de valores, basta um deles (OU).
-# As regras serão executadas pelo Experta apenas na Fase 2.
+# As regras correspondentes são executadas pelo motor Experta.
 # ---------------------------------------------------------------------------
 REGRAS: tuple[Regra, ...] = (
     # Desenvolvimento Back-end: regras 1 a 3.
@@ -326,14 +322,15 @@ PESOS_PONTUACAO: dict[str, int] = {
 #   media = 1 e alta = 1;
 # - Nas demais carreiras, nenhuma afinidade matemática acrescenta pontos.
 # A resposta baixa nunca elimina uma carreira. 'nenhuma' (ferramenta) vale 0.
-# Cada dimensão contribui no maximo uma vez por carreira; uma regra disparada
-# registra justificativas, mas NAO multiplica os pontos da dimensão.
+# Cada dimensão contribui no máximo uma vez por carreira. Os disparos das
+# regras contribuem somente para desempatar carreiras de mesma pontuação,
+# sem acrescentar pontos nem duplicar critérios individuais.
 
 ORDEM_DESEMPATE: tuple[str, ...] = (
-    "atuacao",               
-    "entrega",               
-    "ferramenta_principal",  
-    "matematica",            
+    "atuacao",               # 1o: atividade profissional escolhida (pergunta 2)
+    "entrega",               # 2o: resultado desejado (pergunta 4)
+    "ferramenta_principal",  # 3o: afinidade com ferramenta principal (pergunta 3)
+    "matematica",            # 4o: compatibilidade matemática (pergunta 1)
 )
 
 
@@ -421,4 +418,4 @@ if __name__ == "__main__":
     print(f"Trilhas de carreira: {len(TRILHAS)}")
     print(f"Regras declarativas: {len(REGRAS)}")
     print("Pontuação e desempate: configurados")
-    print("Motor Experta e interface Streamlit: reservados para as próximas fases")
+    print("Base de conhecimento verificada e pronta para uso no motor.")

@@ -10,7 +10,7 @@ A aplicação apresenta uma entrevista com quatro perguntas, calcula a compatibi
 - Validação de todas as respostas obrigatórias.
 - Motor de inferência com **30 regras cruzadas** implementadas com a biblioteca **Experta**.
 - Pontuação das **dez trilhas profissionais** conforme a matriz de decisão cadastrada.
-- Resolução de empates por critérios ordenados: atuação profissional, entrega de valor, ferramenta principal e afinidade matemática.
+- Desempate em duas camadas: primeiro pelas evidências das regras efetivamente disparadas; persistindo a igualdade, atuação profissional, entrega de valor, ferramenta principal e afinidade matemática.
 - Recomendação acompanhada de justificativas de pontuação e identificação das regras efetivamente disparadas.
 - Consulta às pontuações das dez carreiras e às regras adicionais identificadas.
 - Interface web construída com Streamlit.
@@ -47,6 +47,7 @@ O ambiente utilizado na validação foi Windows com PowerShell e ambiente virtua
 ├── motor_inferencia.py      # Motor Experta, pontuação e recomendações
 ├── test_personas.py         # Testes automatizados das personas
 ├── relatorio_validacao.md   # Resultados e limitações da validação
+├── matriz_decisao.md       # Matriz de pontuação e catálogo de 30 regras
 ├── requirements.txt         # Dependências Python
 ├── README.md                # Documentação principal
 └── .gitignore               # Arquivos ignorados pelo Git
@@ -111,16 +112,49 @@ Alternativamente:
 python -m unittest -v test_personas.py
 ```
 
-A suíte valida quatro personas (analítica, infraestrutura e segurança, visual/front-end e negócios/produtos), além da rejeição de perfis incompletos, exigência de entrevista para recomendar e isolamento de informações entre entrevistas. A execução documentada encerrou com **4 testes aprovados**.
+A suíte automatizada verifica quatro personas, perfis completos das dez carreiras, diferenciação entre Ciência de Dados e Engenharia de Dados, desempates com e sem regras disparadas, cenários de ativação das 30 regras, rejeição de perfis incompletos e isolamento entre entrevistas. **Após a refatoração, os 9 testes passaram com Experta no ambiente de desenvolvimento (1,366 segundo, sem falhas).** O conjunto anterior tinha 4 testes, também aprovados.
 
-Os resultados detalhados, as carreiras, as pontuações e as limitações dos testes estão em [`relatorio_validacao.md`](relatorio_validacao.md). A validação registrada compreende testes automatizados do motor e verificações manuais na interface, não uma suíte automatizada de ponta a ponta no navegador.
+Os resultados das quatro personas originais, os testes ampliados, os cenários da refatoração e as limitações estão em [`relatorio_validacao.md`](relatorio_validacao.md). A validação registrada compreende testes automatizados do motor e verificações manuais na interface, não uma suíte automatizada de ponta a ponta no navegador.
 
 ## Como a recomendação é calculada
 
-A base de conhecimento define respostas, trilhas, pesos e condições das 30 regras. O motor calcula a pontuação de cada carreira a partir das quatro respostas; a quantidade de regras disparadas **não multiplica a pontuação**. Quando há empate na maior pontuação, os quatro critérios de desempate são aplicados na ordem cadastrada.
+A base de conhecimento define quatro respostas, dez trilhas, pesos e 30 regras cruzadas. O motor Experta executa as regras e registra as condições realmente atendidas, enquanto a matriz calcula a pontuação de cada carreira. As regras **não aumentam nem duplicam os pontos**.
 
-A apresentação distingue as **justificativas de pontuação** das **regras cruzadas efetivamente acionadas**. Portanto, uma carreira pode ser recomendada pela pontuação e pelo desempate mesmo que nenhuma regra cruzada própria tenha disparado; essa situação é informada ao usuário.
+A decisão segue a política:
+
+1. Selecionar a carreira com **maior pontuação**; se houver apenas uma, ela é recomendada.
+2. Se houver empate na maior pontuação, comparar **quantas regras cruzadas do Experta foram disparadas para cada carreira empatada**. Vence a que possuir mais evidências, desde que não haja novo empate.
+3. Persistindo o empate de evidências (inclusive quando nenhuma regra disparou), aplicar os critérios ordenados: **atuação → entrega → ferramenta principal → matemática**.
+4. Se todos os critérios ainda coincidirem, informar erro explícito, em vez de selecionar arbitrariamente uma carreira.
+
+Exemplo de decisão revisada: matemática média, atuação DevOps, Linux/Redes e entrega de infraestrutura produzem **7 pontos tanto para DevOps & SRE quanto para Cloud Architecture**. A regra 21 de Cloud é disparada, decidindo o empate a favor de **Cloud Architecture**, sem alterar a pontuação. Na política anterior, a atuação favorecia DevOps. **O novo resultado foi confirmado na interface Streamlit após a refatoração.**
+
+A interface distingue **justificativas de pontuação**, **regras cruzadas disparadas** e **critério decisivo do desempate**. Quando nenhuma regra da carreira recomendada foi ativada, isso é mostrado explicitamente. A [matriz de decisão](matriz_decisao.md) detalha todas as carreiras, pesos e regras.
 
 ## Escopo e limitações
 
 Esta é uma ferramenta acadêmica de apoio à exploração de carreiras, não uma avaliação psicológica ou profissional definitiva. As recomendações dependem das alternativas e dos pesos definidos na base de conhecimento. Os cenários validados não garantem cobertura exaustiva de todas as combinações possíveis de respostas.
+
+
+## Validação e reprodução dos testes
+
+A refatoração foi verificada no ambiente de desenvolvimento com **9 testes automatizados aprovados com Experta real**. Na interface Streamlit, foram conferidos os seguintes cenários após a mudança:
+
+| Cenário | Resultado confirmado | Regras da carreira recomendada |
+|---|---|---|
+| Empate DevOps/Cloud | Cloud Architecture — 7 pontos, desempate por evidência | 21 |
+| Engenharia de Dados | Engenharia de Dados — 14 pontos | 10 e 11 |
+| Ciência de Dados e Machine Learning | Ciência de Dados e Machine Learning — 15 pontos | 7, 8 e 9 |
+
+As quatro personas originais também foram validadas na versão anterior da interface e permanecem cobertas pelos testes automatizados da versão refatorada. **Não foi realizada uma nova conferência manual de todas as quatro personas após a mudança.**
+
+Para reproduzir os testes no ambiente Python configurado, execute:
+
+```powershell
+python base_conhecimento.py
+python motor_inferencia.py
+python -m unittest -v test_personas.py
+python -m streamlit run app.py
+```
+
+Após iniciar o Streamlit, confira os resultados no navegador. Em outro computador ou após novas alterações, execute novamente os testes e atualize o [relatório de validação](relatorio_validacao.md) com os resultados observados. Os cenários aprovados não constituem teste exaustivo das 3.300 combinações possíveis nem automação de navegador de ponta a ponta.

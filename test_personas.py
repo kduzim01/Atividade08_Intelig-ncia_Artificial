@@ -163,6 +163,91 @@ class TestarPersonas(unittest.TestCase):
             with self.subTest(persona=persona.nome):
                 self.conferir_persona(motor, persona)
 
+    def test_diferenciacao_entre_ciencia_e_engenharia_de_dados(self) -> None:
+        """Atuação e objetivo distintos devem separar carreiras próximas."""
+        perfis = (
+            ({"matematica": "alta", "atuacao": "analise",
+              "ferramenta": "python", "entrega": "inteligencia"},
+             "ciencia_dados_ml", (7, 8, 9)),
+            ({"matematica": "alta", "atuacao": "engenharia_dados",
+              "ferramenta": "sql", "entrega": "dados"},
+             "engenharia_dados", (10, 11)),
+            ({"matematica": "media", "atuacao": "engenharia_dados",
+              "ferramenta": "python", "entrega": "dados"},
+             "engenharia_dados", (11, 12)),
+        )
+        for respostas, carreira, regras in perfis:
+            with self.subTest(carreira=carreira, ferramenta=respostas["ferramenta"]):
+                motor = MotorInferencia()
+                motor.registrar_perfil(respostas)
+                recomendado = motor.recomendar_carreira()
+                self.assertEqual(recomendado.codigo_trilha, carreira)
+                self.assertEqual(
+                    tuple(regra.numero for regra in recomendado.regras_da_trilha),
+                    regras,
+                )
+
+    def test_dez_trilhas_com_perfis_completos(self) -> None:
+        """Toda trilha deve ser recomendável com respostas alinhadas."""
+        for trilha in TRILHAS:
+            respostas = {
+                "matematica": "alta" if trilha.codigo == "ciencia_dados_ml" else "media",
+                "atuacao": trilha.atuacao,
+                "ferramenta": trilha.ferramentas_principais[0],
+                "entrega": trilha.entrega,
+            }
+            with self.subTest(carreira=trilha.codigo):
+                motor = MotorInferencia()
+                motor.registrar_perfil(respostas)
+                resultado = motor.recomendar_carreira()
+                self.assertEqual(resultado.codigo_trilha, trilha.codigo)
+                self.assertGreaterEqual(resultado.pontuacao_total, 13)
+
+    def test_regras_de_inferencia_podem_decidir_empate(self) -> None:
+        """Disparo da regra 21 decide DevOps/Cloud com os mesmos sete pontos."""
+        motor = MotorInferencia()
+        motor.registrar_perfil({
+            "matematica": "media", "atuacao": "devops",
+            "ferramenta": "redes", "entrega": "infraestrutura",
+        })
+        resultado = motor.recomendar_carreira()
+        pontuacoes = {item.codigo_trilha: item.total for item in resultado.pontuacoes}
+        self.assertEqual(pontuacoes["devops_sre"], 7)
+        self.assertEqual(pontuacoes["cloud_architecture"], 7)
+        self.assertEqual(resultado.codigo_trilha, "cloud_architecture")
+        self.assertIsNotNone(resultado.desempate)
+        self.assertEqual(resultado.desempate.criterio_decisivo, "regras_cruzadas")
+        self.assertEqual(tuple(r.numero for r in resultado.regras_da_trilha), (21,))
+        self.assertEqual(resultado.pontuacao_total, 7)
+        self.assertIn("Regra 21:", resultado.formatar())
+
+    def test_empate_sem_disparos_preserva_preferencia_de_atuacao(self) -> None:
+        """Sem evidências, a ordem original de desempate segue válida."""
+        motor = MotorInferencia()
+        motor.registrar_perfil({
+            "matematica": "media", "atuacao": "devops",
+            "ferramenta": "nenhuma", "entrega": "infraestrutura",
+        })
+        resultado = motor.recomendar_carreira()
+        self.assertEqual(resultado.codigo_trilha, "devops_sre")
+        self.assertIsNotNone(resultado.desempate)
+        self.assertEqual(resultado.desempate.criterio_decisivo, "atuacao")
+        self.assertFalse(resultado.regras_da_trilha)
+
+    def test_todas_as_regras_possuem_um_cenario_de_disparo(self) -> None:
+        """Cada regra declarada deve possuir um perfil que a aciona no Experta."""
+        modelo = dict(PERSONAS[0].respostas)
+        for regra in REGRAS:
+            respostas = dict(modelo)
+            for condicao in regra.condicoes:
+                respostas[condicao.dimensao] = condicao.valores[0]
+            with self.subTest(regra=regra.numero):
+                motor = MotorInferencia()
+                motor.registrar_perfil(respostas)
+                motor.recomendar_carreira()
+                disparadas = {r.numero for r in motor.regras_disparadas}
+                self.assertIn(regra.numero, disparadas)
+
     def test_recomendacao_exige_perfil(self) -> None:
         with self.assertRaises(RuntimeError):
             MotorInferencia().recomendar_carreira()
